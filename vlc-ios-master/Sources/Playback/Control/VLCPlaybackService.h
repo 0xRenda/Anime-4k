@@ -138,6 +138,9 @@ NS_SWIFT_NAME(PlaybackService)
 @property (nonatomic, readonly) VLCPlayerDisplayController *playerDisplayController;
 
 @property (nonatomic) NSMutableArray *openedLocalURLs;
+#if TARGET_OS_IOS
+@property (nonatomic) NSMutableArray *openedLocalFileAccesses;
+#endif
 
 + (VLCPlaybackService *)sharedInstance;
 - (VLCTime *)playedTime;

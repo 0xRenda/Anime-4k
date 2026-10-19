@@ -18,6 +18,12 @@ final class RoxyVideoFrameQueue: NSObject {
         return active
     }
 
+    @objc var receivedFrameCount: UInt64 {
+        lock.lock()
+        defer { lock.unlock() }
+        return sequence
+    }
+
     @objc(submitPixelBuffer:)
     func submit(pixelBuffer: CVPixelBuffer) {
         lock.lock()

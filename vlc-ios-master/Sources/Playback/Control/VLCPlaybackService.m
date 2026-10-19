@@ -117,7 +117,12 @@ static const float kVLCPlaybackRateMaximum = 8.0f;
     NSInteger _secondaryVideoSubtitleTrackIndex;
 #if TARGET_OS_IOS
     RoxyVLCVideoOutput *_roxyVideoOutput;
-    BOOL _roxyStartAfterStop;
+    BOOL _roxyWaitingForStop;
+    BOOL _roxyFinishingStop;
+    BOOL _roxyStoppedWithError;
+    BOOL _roxyAwaitingStart;
+    BOOL _roxyStopAfterStart;
+    void (^_roxyPendingStart)(void);
 #endif
 }
 
@@ -207,6 +212,9 @@ static const float kVLCPlaybackRateMaximum = 8.0f;
         _secondaryVideoSubtitleTrackIndex = -1;
         
         _openedLocalURLs = [[NSMutableArray alloc] init];
+#if TARGET_OS_IOS
+        _openedLocalFileAccesses = [NSMutableArray new];
+#endif
         dispatch_async(dispatch_get_main_queue(), ^{
             self->_externalAudioPlaybackDeviceConnected = [self isExternalAudioPlaybackDeviceConnected];
         });
@@ -233,6 +241,36 @@ static const float kVLCPlaybackRateMaximum = 8.0f;
 
 - (void)playMediaList:(VLCMediaList *)mediaList firstIndex:(NSInteger)index subtitlesFilePath:(NSString * _Nullable)subsFilePath completion:(void (^ __nullable)(BOOL success))completion
 {
+#if TARGET_OS_IOS
+    if (![NSThread isMainThread]) {
+        dispatch_async(dispatch_get_main_queue(), ^{ [self playMediaList:mediaList firstIndex:index subtitlesFilePath:subsFilePath completion:completion]; });
+        return;
+    }
+    if (mediaList.count == 0 || index < -1 || (index >= 0 && (NSUInteger)index >= mediaList.count)) {
+        if (completion) completion(NO);
+        [[NSNotificationCenter defaultCenter] postNotificationName:VLCPlaybackServicePlaybackDidFail object:self];
+        return;
+    }
+    // Do not change the live queue or its completion while VLC is stopping.
+    // A newer request supersedes a pending request, releasing its file leases.
+    __weak typeof(self) weakSelf = self;
+    _roxyPendingStart = ^{
+        typeof(self) self = weakSelf;
+        if (!self) return;
+        self->_playbackCompletion = [completion copy];
+        self.mediaList = mediaList;
+        self->_itemInMediaListToBePlayedFirst = (int)index;
+        self->_pathToExternalSubtitlesFile = [subsFilePath copy];
+        self->_sessionWillRestart = NO;
+        self->_roxyStoppedWithError = NO;
+        [self startPlayback];
+    };
+    if (_playerIsSetup || _roxyWaitingForStop || _roxyFinishingStop) {
+        [self _roxyRequestStop];
+    } else {
+        [self _roxyRunPendingStart];
+    }
+#else
     _playbackCompletion = completion;
     self.mediaList = mediaList;
     _itemInMediaListToBePlayedFirst = (int)index;
@@ -250,7 +288,83 @@ static const float kVLCPlaybackRateMaximum = 8.0f;
                                                                         completion:nil];
     }
 #endif
+#endif
 }
+
+#if TARGET_OS_IOS
+- (void)_roxyRunPendingStart
+{
+    dispatch_async(dispatch_get_main_queue(), ^{
+        if (self->_roxyWaitingForStop || self->_roxyFinishingStop || self->_playerIsSetup) return;
+        void (^start)(void) = self->_roxyPendingStart;
+        self->_roxyPendingStart = nil;
+        if (start) start();
+    });
+}
+
+- (void)_roxyRequestStop
+{
+    if (_roxyWaitingForStop || _roxyFinishingStop) return;
+    self.stopAfterCurrentItem = NO;
+    // playItemAtNumber itself is queued by VLCKit. Its cached state/media can
+    // still describe the predecessor; wait for Opening before requesting stop.
+    if (_roxyAwaitingStart) {
+        _roxyWaitingForStop = YES;
+        _roxyStopAfterStart = YES;
+        return;
+    }
+    if (_currentlyPlayingLibraryMedia) {
+        [[NSNotificationCenter defaultCenter] postNotificationName:VLCPlaybackServicePlaybackWillStop object:self
+                                                          userInfo:@{VLCLastPlaylistPlayedMedia: _currentlyPlayingLibraryMedia}];
+    }
+    VLCMediaPlayerState state = _mediaPlayer.state;
+    if (_mediaPlayer.media && state != VLCMediaPlayerStateStopped && state != VLCMediaPlayerStateNothingSpecial) {
+        _roxyWaitingForStop = YES;
+        [self savePlaybackState];
+        if (state != VLCMediaPlayerStateStopping) {
+            [_listPlayer stop];
+        }
+        return;
+    }
+    [self _roxyFinishStop];
+}
+
+- (void)_roxyFinishStop
+{
+    _roxyFinishingStop = YES;
+    BOOL failed = _roxyStoppedWithError;
+    if (_mediaPlayer.media) {
+        VLCMediaStats stats = _mediaPlayer.media.statistics;
+        failed = failed || (stats.decodedAudio == 0 && stats.decodedVideo == 0);
+    }
+    void (^completion)(BOOL) = _playbackCompletion;
+    _playbackCompletion = nil;
+    _roxyWaitingForStop = NO;
+    _roxyAwaitingStart = NO;
+    _roxyStopAfterStart = NO;
+    _playerIsSetup = NO;
+    _sessionWillRestart = NO;
+    _mediaPlayerState = VLCMediaPlayerStateStopped;
+    _currentlyPlayingLibraryMedia = nil;
+    _metadataMediaURL = nil;
+    _openedMedia = nil;
+    _isInFillToScreen = NO;
+    _shuffledList = nil;
+    _mediaList = [VLCMediaList new];
+    _listPlayer.mediaList = _mediaList;
+    // This path runs only once the old vout/file reader has finished stopping.
+    for (NSURL *url in _openedLocalURLs) [url stopAccessingSecurityScopedResource];
+    [_openedLocalURLs removeAllObjects];
+    [_openedLocalFileAccesses removeAllObjects];
+    if (completion) completion(!failed);
+    _roxyFinishingStop = NO;
+    if (!_roxyPendingStart) {
+        [self cancelSleepTimer];
+        [[NSNotificationCenter defaultCenter] postNotificationName:VLCPlaybackServicePlaybackDidStop object:self];
+    }
+    [self _roxyRunPendingStart];
+}
+#endif
 
 -(void)configurePlaybackWithMediaAtIndex:(NSInteger)index fromMediaList:(VLCMediaList *)mediaList
 {
@@ -282,15 +396,10 @@ static const float kVLCPlaybackRateMaximum = 8.0f;
 - (void)startPlayback
 {
 #if TARGET_OS_IOS
-    // VLC 4 stops asynchronously. A reopened session must not replace vmem
-    // callbacks until the old output has released its format and buffers.
-    if (!_playerIsSetup && _mediaPlayer.state == VLCMediaPlayerStateStopping) {
-        _roxyStartAfterStop = YES;
-        return;
-    }
+    if (_roxyWaitingForStop || _roxyFinishingStop) return;
 #endif
     [self _setupPlayer];
-    [self _playNewMedia];
+    if (_playerIsSetup) [self _playNewMedia];
 }
 
 - (void)_setupPlayer
@@ -559,6 +668,9 @@ static const float kVLCPlaybackRateMaximum = 8.0f;
         return;
     }
 
+#if TARGET_OS_IOS
+    _roxyAwaitingStart = YES;
+#endif
     [_listPlayer playItemAtNumber:@(_itemInMediaListToBePlayedFirst)];
     _currentIndex = _itemInMediaListToBePlayedFirst;
 
@@ -569,8 +681,13 @@ static const float kVLCPlaybackRateMaximum = 8.0f;
 - (void)stopPlayback
 {
 #if TARGET_OS_IOS
-    _roxyStartAfterStop = NO;
-#endif
+    if (![NSThread isMainThread]) {
+        dispatch_async(dispatch_get_main_queue(), ^{ [self stopPlayback]; });
+        return;
+    }
+    _roxyPendingStart = nil;
+    [self _roxyRequestStop];
+#else
     self.stopAfterCurrentItem = NO;
 
     BOOL ret = [_playbackSessionManagementLock tryLock];
@@ -643,6 +760,7 @@ static const float kVLCPlaybackRateMaximum = 8.0f;
         [self cancelSleepTimer];
         [[NSNotificationCenter defaultCenter] postNotificationName:VLCPlaybackServicePlaybackDidStop object:self];
     }
+#endif
 }
 
 - (void)restoreDelaysForMedia:(VLCMLMedia *)media
@@ -1113,6 +1231,18 @@ static const float kVLCPlaybackRateMaximum = 8.0f;
 #endif
 
     dispatch_async(dispatch_get_main_queue(), ^{
+#if TARGET_OS_IOS
+        if (currentState == VLCMediaPlayerStateOpening || currentState == VLCMediaPlayerStatePlaying ||
+            currentState == VLCMediaPlayerStatePaused || currentState == VLCMediaPlayerStateError) {
+            self->_roxyAwaitingStart = NO;
+            if (self->_roxyStopAfterStart) {
+                self->_roxyStopAfterStart = NO;
+                if (currentState == VLCMediaPlayerStateError) self->_roxyStoppedWithError = YES;
+                [self->_listPlayer stop];
+                return;
+            }
+        }
+#endif
         switch (currentState) {
             case VLCMediaPlayerStateOpening: {
                 APLog(@"%s: opening", __func__);
@@ -1165,8 +1295,13 @@ static const float kVLCPlaybackRateMaximum = 8.0f;
                 dispatch_async(dispatch_get_main_queue(),^{
                     [[NSNotificationCenter defaultCenter] postNotificationName:VLCPlaybackServicePlaybackDidFail object:self];
                 });
+#if TARGET_OS_IOS
+                self->_roxyStoppedWithError = YES;
+                [self _roxyRequestStop];
+#else
                 self->_sessionWillRestart = NO;
                 [self stopPlayback];
+#endif
             } break;
             case VLCMediaPlayerStateStopping: {
                 APLog(@"%s: stopping", __func__);
@@ -1175,17 +1310,18 @@ static const float kVLCPlaybackRateMaximum = 8.0f;
             case VLCMediaPlayerStateStopped: {
                 APLog(@"%s: stopped", __func__);
 #if TARGET_OS_IOS
-                if (self->_roxyStartAfterStop) {
-                    self->_roxyStartAfterStop = NO;
-                    dispatch_async(dispatch_get_main_queue(), ^{ [self startPlayback]; });
+                if (self->_roxyAwaitingStart && self->_roxyStopAfterStart) break;
+                if (self->_roxyWaitingForStop) {
+                    [self _roxyFinishStop];
                     break;
                 }
+                if (!self->_playerIsSetup) break;
 #endif
                 [self->_listPlayer.mediaList lock];
                 NSUInteger listCount = self->_listPlayer.mediaList.count;
                 [self->_listPlayer.mediaList unlock];
 
-                if ([self->_listPlayer.mediaList indexOfMedia:self->_mediaPlayer.media] == listCount - 1
+                if (listCount > 0 && [self->_listPlayer.mediaList indexOfMedia:self->_mediaPlayer.media] == listCount - 1
                     && self.repeatMode == VLCDoNotRepeat) {
                     self->_sessionWillRestart = NO;
                     [self stopPlayback];
@@ -1991,6 +2127,7 @@ static const float kVLCPlaybackRateMaximum = 8.0f;
 - (void)mediaDidFinishParsing:(VLCMedia *)aMedia
 {
     dispatch_async(dispatch_get_main_queue(), ^{
+        if (!self->_playerIsSetup || ![aMedia isEqual:self->_mediaPlayer.media]) return;
         VLCMediaList *subitems = aMedia.subitems;
         if (subitems && subitems.count > 0) {
             [self _expandMediaList:subitems forMedia:aMedia];

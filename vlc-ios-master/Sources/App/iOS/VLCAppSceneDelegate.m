@@ -16,6 +16,7 @@
 
 @interface VLCAppSceneDelegate () <UISceneDelegate>
 {
+    NSMutableArray<UIOpenURLContext *> *_pendingURLContexts;
 }
 
 @end
@@ -51,7 +52,9 @@
             [[VLCAppCoordinator sharedInstance] handleShortcutItem:shortcutItem];
         }];
     }
-    if ([session.role isEqualToString:UIWindowSceneSessionRoleApplication]) {
+    // An explicit file/deep link takes precedence over restoring the old queue.
+    if ([session.role isEqualToString:UIWindowSceneSessionRoleApplication] &&
+        connectionOptions.URLContexts.count == 0 && !firstActivity && !shortcutItem) {
         [[VLCAppCoordinator sharedInstance].mediaLibraryService restoreLastPlayedMediaList];
     }
 }
@@ -65,6 +68,11 @@
     UIApplication *sharedApplication = [UIApplication sharedApplication];
     VLCAppDelegate *appDelegate = (VLCAppDelegate *)sharedApplication.delegate;
     [appDelegate applicationDidBecomeActive:sharedApplication];
+    NSArray<UIOpenURLContext *> *pending = [_pendingURLContexts copy];
+    [_pendingURLContexts removeAllObjects];
+    for (UIOpenURLContext *context in pending) {
+        [self openURLContext:context];
+    }
 }
 
 - (void)sceneWillResignActive:(UIScene *)scene
@@ -88,10 +96,22 @@
 
 - (void)scene:(UIScene *)scene openURLContexts:(NSSet<UIOpenURLContext *> *)URLContexts
 {
-    NSURL *url = URLContexts.anyObject.URL;
-    if (!url) {
-        return;
+    for (UIOpenURLContext *context in URLContexts) {
+        // Cold launches and share-sheet activations arrive before the player
+        // can be presented. Retain the original context until activation.
+        if (scene.activationState != UISceneActivationStateForegroundActive) {
+            if (!_pendingURLContexts) _pendingURLContexts = [NSMutableArray new];
+            [_pendingURLContexts addObject:context];
+        } else {
+            [self openURLContext:context];
+        }
     }
+}
+
+- (void)openURLContext:(UIOpenURLContext *)context
+{
+    NSURL *url = context.URL;
+    if (!url) return;
 
     if ([url.scheme isEqualToString:@"ml-widget"]) {
         NSArray<NSString *> *pathComponents = url.pathComponents;
@@ -101,7 +121,11 @@
 
     UIApplication *sharedApplication = [UIApplication sharedApplication];
     VLCAppDelegate *appDelegate = (VLCAppDelegate *)sharedApplication.delegate;
-    [appDelegate application:sharedApplication openURL:url options:@{}];
+    NSMutableDictionary<UIApplicationOpenURLOptionsKey, id> *options = [NSMutableDictionary new];
+    options[UIApplicationOpenURLOptionsOpenInPlaceKey] = @(context.options.openInPlace);
+    if (context.options.sourceApplication) options[UIApplicationOpenURLOptionsSourceApplicationKey] = context.options.sourceApplication;
+    if (context.options.annotation) options[UIApplicationOpenURLOptionsAnnotationKey] = context.options.annotation;
+    [appDelegate application:sharedApplication openURL:url options:options];
 }
 
 - (void)scene:(UIScene *)scene willContinueUserActivityWithType:(NSString *)userActivityType

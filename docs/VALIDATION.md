@@ -77,3 +77,26 @@ The IPA artifact is `Roxy-Player-automatic-unsigned` (37,189,069-byte artifact
 ZIP, retained for 14 days). Signing and physical-device playback/performance
 testing remain outstanding. This successful build does not certify device
 performance, HDR preservation, or enhanced Picture in Picture support.
+
+## 4.0.1 media-opening fixes
+
+The reported symptom is that sharing an MKV opens the library without starting
+video. The revised file-opening path waits for scene activation, preserves the
+original open-in-place options, coordinates provider access off the main thread,
+and retains file access until the corresponding LibVLC session has stopped.
+The document picker now accepts readable app-owned files without requiring a
+security-scope grant, detects folders by their resource type, and waits for
+dismissal before opening playback. Inbox moves are serialized and remember
+their destinations when another import operation already moved the same file.
+
+Playback replacements no longer overwrite the active completion or queue before
+stopping. Startup and stop callbacks serialize replacements, including requests
+received while VLCKit still has its initial play operation queued. Stale parsing
+callbacks cannot expand an unrelated replacement queue.
+
+Local shader freshness, all 17 Python tests, Swift/Bash grammar parsing, workflow
+YAML parsing, and whitespace checks passed. Eight new hosted iOS tests exercise
+MKV sharing, local MP4 access, missing files, extensionless documents, dotted
+folder names, completion ownership, rapid replacements, and actual delivery to
+the Anime4K frame queue. These tests must pass on the macOS runner before the
+workflow uploads the new IPA. Physical-device/file-provider testing is pending.

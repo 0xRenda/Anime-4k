@@ -13,6 +13,7 @@
 
 #import "VLCDocumentPickerController.h"
 #import "VLCPlaybackService.h"
+#import "VLC-Swift.h"
 #import <UniformTypeIdentifiers/UniformTypeIdentifiers.h>
 
 @interface VLCDocumentPickerController () <UIDocumentPickerDelegate>
@@ -45,72 +46,37 @@
 
 - (void)documentPicker:(UIDocumentPickerViewController *)controller didPickDocumentsAtURLs:(NSArray<NSURL *> *)urls
 {
-    VLCMediaList *medialist = [[VLCMediaList alloc] init];
-
-    if (urls.count == 1 && [[urls.firstObject pathExtension] isEqualToString:@""]) {
-        [self appendFolderContentsAtURL:urls.firstObject toMediaList:medialist];
-    } else {
-        [self appendURLs:urls toMediaList:medialist];
-    }
-
-    if ([medialist count] > 0) {
-        [[VLCPlaybackService sharedInstance] playMediaList:medialist firstIndex:0 subtitlesFilePath:nil];
-    } else {
-        [self showEmptyMediaListAlert];
-    }
-
-    self.retainedSelf = nil;
+    [RoxyMediaFileAccess prepareURLs:urls completion:^(NSArray<RoxyMediaFileAccess *> *accesses, NSError *error) {
+        void (^openPreparedFiles)(void) = ^{
+            if (error || accesses.count == 0) {
+                [RoxyMediaFileAccess showOpenError:error ?: [NSError errorWithDomain:NSCocoaErrorDomain code:NSFileReadUnknownError userInfo:nil]];
+            } else {
+                VLCMediaList *mediaList = [VLCMediaList new];
+                for (RoxyMediaFileAccess *access in accesses) {
+                    [mediaList addMedia:[VLCMedia mediaWithURL:access.url]];
+                }
+                [[VLCPlaybackService sharedInstance] playMediaList:mediaList firstIndex:0 subtitlesFilePath:nil completion:^(BOOL success) {
+                    for (RoxyMediaFileAccess *access in accesses) [access close];
+                }];
+            }
+            self.retainedSelf = nil;
+        };
+        // Present playback only after the Files sheet has finished dismissing.
+        if (controller.isBeingDismissed && controller.transitionCoordinator) {
+            [controller.transitionCoordinator animateAlongsideTransition:nil completion:^(id<UIViewControllerTransitionCoordinatorContext> context) {
+                openPreparedFiles();
+            }];
+        } else if (controller.presentingViewController) {
+            [controller dismissViewControllerAnimated:YES completion:openPreparedFiles];
+        } else {
+            openPreparedFiles();
+        }
+    }];
 }
 
 - (void)documentPickerWasCancelled:(UIDocumentPickerViewController *)controller
 {
     self.retainedSelf = nil;
-}
-
-#pragma mark - Private
-
-- (void)appendFolderContentsAtURL:(NSURL *)folderURL toMediaList:(VLCMediaList *)medialist
-{
-    [folderURL startAccessingSecurityScopedResource];
-
-    NSError *error = nil;
-    NSArray<NSURL *> *filesInFolder = [[NSFileManager defaultManager] contentsOfDirectoryAtURL:folderURL
-                                                                    includingPropertiesForKeys:@[]
-                                                                                       options:NSDirectoryEnumerationSkipsHiddenFiles
-                                                                                         error:&error];
-    if (error) {
-        NSLog(@"Error reading directory: %@", error);
-        return;
-    }
-
-    NSSortDescriptor *sortDescriptor = [NSSortDescriptor sortDescriptorWithKey:@"lastPathComponent"
-                                                                    ascending:YES
-                                                                     selector:@selector(localizedStandardCompare:)];
-    [self appendURLs:[filesInFolder sortedArrayUsingDescriptors:@[sortDescriptor]] toMediaList:medialist];
-}
-
-- (void)appendURLs:(NSArray<NSURL *> *)urls toMediaList:(VLCMediaList *)medialist
-{
-    for (NSURL *url in urls) {
-        if ([[url pathExtension] isEqualToString:@""]) {
-            continue;
-        }
-        if ([url startAccessingSecurityScopedResource]) {
-            [medialist addMedia:[VLCMedia mediaWithURL:url]];
-            [[VLCPlaybackService sharedInstance].openedLocalURLs addObject:url];
-        }
-    }
-}
-
-- (void)showEmptyMediaListAlert
-{
-    UIAlertController *alert = [UIAlertController alertControllerWithTitle:NSLocalizedString(@"EMPTY_MEDIA_LIST", "")
-                                                                   message:NSLocalizedString(@"EMPTY_MEDIA_LIST_DESCRIPTION", "")
-                                                            preferredStyle:UIAlertControllerStyleAlert];
-    [alert addAction:[UIAlertAction actionWithTitle:NSLocalizedString(@"BUTTON_DISMISS", "")
-                                              style:UIAlertActionStyleCancel
-                                            handler:nil]];
-    [self.presentingViewController presentViewController:alert animated:YES completion:nil];
 }
 
 @end

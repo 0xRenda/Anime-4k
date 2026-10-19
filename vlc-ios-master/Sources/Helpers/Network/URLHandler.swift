@@ -347,45 +347,40 @@ class FileURLHandler: NSObject, VLCURLHandler {
     var fileName: String?
     var loop = false
     var shuffle = false
+    private var openGeneration = 0
 
     @objc func canHandleOpen(url: URL, options: [UIApplication.OpenURLOptionsKey: AnyObject]) -> Bool {
         return url.isFileURL
     }
 
     @objc func performOpen(url: URL, options: [UIApplication.OpenURLOptionsKey: AnyObject]) -> Bool {
-        let playbackService = PlaybackService.sharedInstance()
-        let addsSubtitles = playbackService.playerIsSetup && url.lastPathComponent.isSupportedSubtitleFormat()
-
-        if InboxManager.isInInbox(url) {
-            let movedURL = InboxManager.moveToDocuments(url) ?? url
-            InboxManager.drainInbox()
-            if addsSubtitles {
-                playbackService.addSubtitlesToCurrentPlayback(from: movedURL)
-            } else {
-                self.play(url: movedURL, completion: nil)
-            }
-            return true
-        }
-
-        let isSecurityScopedURL = url.startAccessingSecurityScopedResource()
-        if isSecurityScopedURL {
-            playbackService.openedLocalURLs.add(url)
-        }
-
-        if addsSubtitles {
-            playbackService.addSubtitlesToCurrentPlayback(from: url)
-            return true
-        }
-
-        self.play(url: url) { _ in
-            guard isSecurityScopedURL else {
+        openGeneration += 1
+        let generation = openGeneration
+        RoxyMediaFileAccess.prepare(urls: [url]) { accesses, error in
+            guard generation == self.openGeneration else { return }
+            guard let accesses = accesses else {
+                RoxyMediaFileAccess.showOpenError(error ?? CocoaError(.fileReadUnknown) as NSError)
                 return
             }
-
-            url.stopAccessingSecurityScopedResource()
-            playbackService.openedLocalURLs.remove(url)
+            let playbackService = PlaybackService.sharedInstance()
+            if accesses.count == 1, let access = accesses.first,
+               playbackService.playerIsSetup, access.url.lastPathComponent.isSupportedSubtitleFormat() {
+                playbackService.openedLocalFileAccesses.add(access)
+                playbackService.addSubtitlesToCurrentPlayback(from: access.url)
+                return
+            }
+            let media = accesses.compactMap { VLCMedia(url: $0.url) }
+            guard media.count == accesses.count else {
+                RoxyMediaFileAccess.showOpenError(CocoaError(.fileReadUnknown) as NSError)
+                return
+            }
+            UIApplication.shared.dismissPresentedScreensAbovePlayer()
+            playbackService.playMediaList(VLCMediaList(array: media), firstIndex: 0, subtitlesFilePath: nil) { _ in
+                // This completion belongs to this request and runs only after
+                // asynchronous stop, never while switching away from its predecessor.
+                accesses.forEach { $0.close() }
+            }
         }
-
         return true
     }
 }

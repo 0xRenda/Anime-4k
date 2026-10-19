@@ -84,6 +84,9 @@ jobs:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           BUILD_MODE: ${{ github.event_name == 'workflow_dispatch' && inputs.signed && 'signed' || 'unsigned' }}
         run: bash tools/build_ipa.sh "$BUILD_MODE"
+      - name: Test file opening and playback on iOS
+        timeout-minutes: 25
+        run: bash tools/test_playback.sh
       - name: Upload IPA
         uses: actions/upload-artifact@v4
         with:
@@ -97,6 +100,13 @@ jobs:
         with:
           name: Roxy-logs-${{ matrix.quality }}
           path: build/*.log
+          if-no-files-found: ignore
+      - name: Upload playback test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Roxy-playback-tests-${{ matrix.quality }}
+          path: build/playback-tests-*.xcresult
           if-no-files-found: ignore
       - name: Cache downloaded dependencies
         if: ${{ always() && !cancelled() && steps.dependencies.outputs.cache-primary-key != '' && steps.dependencies.outputs.cache-hit != 'true' }}
