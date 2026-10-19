@@ -264,4 +264,30 @@
     } seconds:10], @"The VLC callback never delivered a video frame to Anime4K");
 }
 
+- (void)testVideoReopensWhilePreviousPlayerIsDismissing
+{
+    NSURL *folder = self.testDirectory;
+    NSURL *first = [self copyFixture:@"mkv" into:folder name:@"before close.mkv"];
+    NSURL *second = [self copyFixture:@"mp4" into:folder name:@"after close.mp4"];
+    id<UIApplicationDelegate> delegate = UIApplication.sharedApplication.delegate;
+    UIViewController *root = [(VLCAppDelegate *)delegate window].rootViewController;
+    [delegate application:UIApplication.sharedApplication openURL:first options:@{}];
+    [self assertPlaying:first];
+    XCTAssertTrue([self waitUntil:^BOOL {
+        UIViewController *player = root.presentedViewController;
+        return player.view.window != nil && !player.isBeingPresented && !player.isBeingDismissed;
+    } seconds:5]);
+
+    UIViewController *closingPlayer = root.presentedViewController;
+    [VLCPlaybackService.sharedInstance stopPlayback];
+    XCTAssertTrue([self waitUntil:^BOOL { return closingPlayer.isBeingDismissed; } seconds:5],
+                  @"The test must open the new video during the dismissal animation");
+    [delegate application:UIApplication.sharedApplication openURL:second options:@{}];
+    [self assertPlaying:second];
+    XCTAssertTrue([self waitUntil:^BOOL {
+        UIViewController *player = root.presentedViewController;
+        return player.view.window != nil && !player.isBeingDismissed && !player.isBeingPresented;
+    } seconds:5], @"Decoded video stayed behind the library after a rapid reopen");
+}
+
 @end

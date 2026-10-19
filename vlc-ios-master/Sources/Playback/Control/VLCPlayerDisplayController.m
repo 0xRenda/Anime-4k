@@ -60,6 +60,7 @@ NSString *const VLCPlayerDisplayControllerHideMiniPlayer = @"VLCPlayerDisplayCon
 @property (nonatomic) BOOL horizontalConstraintsConfigured;
 @property (nonatomic) CGFloat appliedMiniPlayerLeadingConstant;
 @property (nonatomic) CGFloat appliedMiniPlayerTrailingConstant;
+@property (nonatomic) NSUInteger roxyPresentationGeneration;
 @end
 
 @implementation VLCPlayerDisplayController
@@ -460,6 +461,8 @@ NSString *const VLCPlayerDisplayControllerHideMiniPlayer = @"VLCPlayerDisplayCon
 
 - (void)dismissPlaybackView
 {
+    // Stop/close cancels any presentation waiting for an older transition.
+    self.roxyPresentationGeneration++;
     switch (self.displayMode) {
         case VLCPlayerDisplayControllerDisplayModeFullscreen:
             if ([VLCKeychainCoordinator passcodeService].isApplicationLocked) {
@@ -513,25 +516,53 @@ NSString *const VLCPlayerDisplayControllerHideMiniPlayer = @"VLCPlayerDisplayCon
 
 - (void)_presentFullscreenPlaybackViewIfNeeded
 {
+    NSUInteger generation = ++self.roxyPresentationGeneration;
     dispatch_async(dispatch_get_main_queue(), ^{
-        if (![self _isPlaybackControllerPresentedOrTransitioning:self.movieViewController]) {
-            [self _presentMovieViewControllerAnimated:[self shouldAnimate]];
-        }
+        [self _presentPlaybackController:self.movieViewController audio:NO generation:generation];
     });
 }
 
 -(void)_presentAudioPlayerViewIfNeeded
 {
+    NSUInteger generation = ++self.roxyPresentationGeneration;
     dispatch_async(dispatch_get_main_queue(), ^{
-        if (![self _isPlaybackControllerPresentedOrTransitioning:self.audioPlayerViewController]) {
-            [self _presentAudioViewControllerAnimated:[self shouldAnimate]];
-        }
+        [self _presentPlaybackController:self.audioPlayerViewController audio:YES generation:generation];
     });
+}
+
+- (void)_presentPlaybackController:(UIViewController *)controller audio:(BOOL)audio generation:(NSUInteger)generation
+{
+    if (generation != self.roxyPresentationGeneration ||
+        self.displayMode != VLCPlayerDisplayControllerDisplayModeFullscreen) return;
+
+    UIViewController *container = [self _presentingControllerForPlaybackController:controller];
+    UIWindow *window = [[[UIApplication sharedApplication] delegate] window];
+    UIViewController *presented = window.rootViewController.presentedViewController;
+    if (container.isBeingDismissed || presented.isBeingDismissed) {
+        // Opening during the previous player's dismissal must not be dropped.
+        // UIKit clears its presenting relationships only after the transition.
+        void (^retry)(void) = ^{
+            [self _presentPlaybackController:controller audio:audio generation:generation];
+        };
+        id<UIViewControllerTransitionCoordinator> coordinator = container.transitionCoordinator ?: presented.transitionCoordinator;
+        if (coordinator && [coordinator animateAlongsideTransition:nil completion:^(id<UIViewControllerTransitionCoordinatorContext> context) {
+            dispatch_async(dispatch_get_main_queue(), retry);
+        }]) return;
+        // A dismissal can be queued before UIKit exposes its coordinator.
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.05 * NSEC_PER_SEC)), dispatch_get_main_queue(), retry);
+        return;
+    }
+    if ([self _isPlaybackControllerPresentedOrTransitioning:controller]) return;
+    if (audio) [self _presentAudioViewControllerAnimated:[self shouldAnimate]];
+    else [self _presentMovieViewControllerAnimated:[self shouldAnimate]];
 }
 
 - (void)_closeFullscreenPlayback
 {
+    NSUInteger generation = self.roxyPresentationGeneration;
     dispatch_async(dispatch_get_main_queue(), ^{
+        // A newer open request may have arrived before this close was dequeued.
+        if (generation != self.roxyPresentationGeneration) return;
         BOOL animated = [self shouldAnimate];
         UIViewController *presentingController = [self _presentingControllerForPlaybackController:self.movieViewController];
         // Dismiss from the level above so any sub-menu presented on top of the player is torn down with it.

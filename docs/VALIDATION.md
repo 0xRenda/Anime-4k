@@ -95,7 +95,7 @@ received while VLCKit still has its initial play operation queued. Stale parsing
 callbacks cannot expand an unrelated replacement queue.
 
 Local shader freshness, all 17 Python tests, Swift/Bash grammar parsing, workflow
-YAML parsing, and whitespace checks passed. Ten new hosted iOS tests exercise
+YAML parsing, and whitespace checks passed. Eleven new hosted iOS tests exercise
 MKV sharing, local MP4 access, missing files, extensionless documents, dotted
 folder names, completion ownership, rapid replacements, and actual delivery to
 the Anime4K frame queue, repeated filenames, and recovery from decoder errors.
@@ -116,3 +116,12 @@ startup through `ROXY_PLAYBACK_TESTS=1`, and setup fails immediately if the
 delegate is absent. Logic tests retain their original startup behavior.
 Simulator compilation now precedes boot to reduce competing memory use on the
 runner, with separate build and runtime logs. The corrected test run is pending.
+
+The corrected hosted run (39332415038) passed nine of ten tests, including real
+MKV decoding, rapid replacement, completion ownership, decoder-error recovery,
+and actual frames reaching Anime4K. The remaining test reproduced the reported
+library symptom: decoding continued but fullscreen presentation was dropped
+while a previous player was dismissing. Presentation now waits for that UIKit
+transition and cancels stale requests on stop/close. A further regression test
+explicitly opens a second video during the first player's dismissal animation.
+The updated eleven-test run is pending; no IPA was published from a failed run.
