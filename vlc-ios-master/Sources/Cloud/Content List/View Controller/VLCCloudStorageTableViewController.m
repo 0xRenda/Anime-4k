@@ -1,0 +1,434 @@
+/*****************************************************************************
+ * VLCCloudStorageTableViewController.m
+ * VLC for iOS
+ *****************************************************************************
+ * Copyright (c) 2013-2019 VideoLAN. All rights reserved.
+ * $Id$
+ *
+ * Authors: Felix Paul Kühne <fkuehne # videolan.org>
+ *          Fabio Ritrovato <sephiroth87 # videolan.org>
+ *          Carola Nitz <nitz.carola # googlemail.com>
+ *
+ * Refer to the COPYING file of the official project for license.
+ *****************************************************************************/
+
+#import "VLCCloudStorageTableViewController.h"
+#import "VLCCloudStorageTableViewCell.h"
+#import "VLCProgressView.h"
+#import "VLC-Swift.h"
+
+typedef NS_ENUM(NSInteger, VLCToolbarStyle) {
+    VLCToolbarStyleNone,
+    VLCToolbarStyleProgress,
+    VLCToolbarStyleSortAndNumOfFiles,
+    VLCToolbarStyleNumOfFiles
+};
+
+@interface VLCCloudStorageTableViewController()
+{
+    VLCProgressView *_progressView;
+    VLCActionSheet *sheet;
+    VLCCloudSortingSpecifierManager *manager;
+    UIRefreshControl *_refreshControl;
+    UIBarButtonItem *_progressBarButtonItem;
+    UIBarButtonItem *_logoutButton;
+    UINavigationController *tempNav;
+    NSString *_initialPath;
+    UIButton *_sortButton;
+    UIButton *_numberOfFilesButton;
+}
+
+@end
+
+@implementation VLCCloudStorageTableViewController
+
+- (void)viewDidLoad
+{
+    [super viewDidLoad];
+
+    _authorizationInProgress = NO;
+    ColorPalette *colors = PresentationTheme.current.colors;
+
+    self.modalPresentationStyle = UIModalPresentationFormSheet;
+
+    self.navigationItem.largeTitleDisplayMode = UINavigationItemLargeTitleDisplayModeNever;
+    
+    UIBarButtonItem *backButton = [[UIBarButtonItem alloc] initWithTitle:NSLocalizedString(@"BUTTON_BACK", nil) style:UIBarButtonItemStylePlain target:self action:@selector(goBack)];
+    self.navigationItem.leftBarButtonItem = backButton;
+
+    _logoutButton = [[UIBarButtonItem alloc] initWithTitle:NSLocalizedString(@"BUTTON_LOGOUT", "") style:UIBarButtonItemStylePlain target:self action:@selector(logout)];
+
+    [self.loginButton setTitle:NSLocalizedString(@"DROPBOX_LOGIN", nil) forState:UIControlStateNormal];
+    [self.loginButton setTitleColor:colors.orangeUI forState:UIControlStateNormal];
+
+    NSNotificationCenter *notificationCenter = [NSNotificationCenter defaultCenter];
+    [notificationCenter addObserver:self selector:@selector(updateForTheme) name:kVLCThemeDidChangeNotification object:nil];
+    [notificationCenter addObserver:self selector:@selector(updateForSizing) name:UIContentSizeCategoryDidChangeNotification object:nil];
+
+    _refreshControl = [[UIRefreshControl alloc] init];
+    _refreshControl.tintColor = [UIColor whiteColor];
+    [_refreshControl addTarget:self action:@selector(handleRefresh) forControlEvents:UIControlEventValueChanged];
+    [self.tableView addSubview:_refreshControl];
+
+    self.navigationItem.titleView.contentMode = UIViewContentModeScaleAspectFit;
+
+    self.tableView.rowHeight = [VLCCloudStorageTableViewCell heightOfCell];
+
+    _numberOfFilesButton = [UIButton buttonWithType:UIButtonTypeSystem];
+    [_numberOfFilesButton setTitle:[NSString stringWithFormat:NSLocalizedString(@"NUM_OF_FILES", nil), 0] forState:UIControlStateNormal];
+    [_numberOfFilesButton setTitleColor:colors.orangeUI forState:UIControlStateNormal];
+    _numberOfFilesButton.translatesAutoresizingMaskIntoConstraints = NO;
+
+    _numberOfFilesBarButtonItem = [[UIBarButtonItem alloc] initWithCustomView:_numberOfFilesButton];
+
+    _sortButton = [UIButton buttonWithType:UIButtonTypeSystem];
+    [_sortButton setTitle:[NSString stringWithFormat:NSLocalizedString(@"SORT", nil), 0] forState:UIControlStateNormal];
+    [_sortButton setTitleColor:colors.orangeUI forState:UIControlStateNormal];
+    [_sortButton addTarget:self action:@selector(sortButtonClicked:) forControlEvents:UIControlEventTouchUpInside];
+    _sortButton.translatesAutoresizingMaskIntoConstraints = NO;
+
+    _sortBarButtonItem = [[UIBarButtonItem alloc] initWithCustomView:_sortButton];
+
+    _sortBarButtonItem.tintColor = colors.orangeUI;
+    _numberOfFilesBarButtonItem.tintColor = colors.orangeUI;
+
+    _activityIndicator = [[UIActivityIndicatorView alloc] initWithActivityIndicatorStyle:UIActivityIndicatorViewStyleWhiteLarge];
+    _activityIndicator.hidesWhenStopped = YES;
+    _activityIndicator.translatesAutoresizingMaskIntoConstraints = NO;
+
+    [self.view addSubview:_activityIndicator];
+
+    [self.view addConstraint:[NSLayoutConstraint constraintWithItem:_activityIndicator attribute:NSLayoutAttributeCenterX relatedBy:NSLayoutRelationEqual toItem:self.view attribute:NSLayoutAttributeCenterX multiplier:1.0 constant:0]];
+    [self.view addConstraint:[NSLayoutConstraint constraintWithItem:_activityIndicator attribute:NSLayoutAttributeCenterY relatedBy:NSLayoutRelationEqual toItem:self.view attribute:NSLayoutAttributeCenterY multiplier:1.0 constant:0]];
+
+    _progressView = [VLCProgressView new];
+    _progressBarButtonItem = [[UIBarButtonItem alloc] initWithCustomView:_progressView];
+    _progressView.tintColor = colors.orangeUI;
+    _progressView.translatesAutoresizingMaskIntoConstraints = NO;
+
+    sheet = [[VLCActionSheet alloc] init];
+    manager = [[VLCCloudSortingSpecifierManager alloc] initWithController: self];
+    sheet.dataSource = manager;
+    sheet.delegate = manager;
+    sheet.modalPresentationStyle = UIModalPresentationCustom;
+    [sheet.collectionView registerClass:[VLCActionSheetCell class] forCellWithReuseIdentifier:VLCActionSheetCell.identifier];
+
+    [self updateToolbarWithProgress:nil];
+    [self updateForTheme];
+    
+    _initialPath = self.currentPath;
+}
+
+- (void)updateForTheme
+{
+    ColorPalette *colors = PresentationTheme.current.colors;
+    self.tableView.separatorColor = colors.background;
+    self.tableView.backgroundColor = colors.background;
+    self.view.backgroundColor = colors.background;
+    _refreshControl.backgroundColor = colors.background;
+    _activityIndicator.activityIndicatorViewStyle = PresentationTheme.current == PresentationTheme.brightTheme ? UIActivityIndicatorViewStyleGray : UIActivityIndicatorViewStyleWhiteLarge;
+    self.loginToCloudStorageView.backgroundColor = colors.background;
+    self.navigationController.toolbar.barStyle = colors.toolBarStyle;
+    _progressView.progressLabel.textColor = colors.cellTextColor;
+}
+
+- (void)updateForSizing
+{
+    self.tableView.rowHeight = [VLCCloudStorageTableViewCell heightOfCell];
+    [self.tableView reloadData];
+}
+
+- (void)viewWillAppear:(BOOL)animated
+{
+    //Workaround since in viewWillDisappear self.navigationController can be nil which will lead to a lingering toolbar
+    tempNav = self.navigationController;
+    tempNav.toolbarHidden = NO;
+    [super viewWillAppear:animated];
+}
+
+- (UIStatusBarStyle)preferredStatusBarStyle
+{
+    return PresentationTheme.current.colors.statusBarStyle;
+}
+
+- (void)viewWillDisappear:(BOOL)animated
+{
+    tempNav.toolbarHidden = YES;
+    tempNav = nil;
+    [super viewWillDisappear:animated];
+
+    if (@available(iOS 26.0, *)) {
+        [self.tabBarController setBottomAccessory:nil animated:YES];
+    }
+}
+
+-(void)handleRefresh
+{
+    //set the title while refreshing
+    _refreshControl.attributedTitle = [[NSAttributedString alloc] initWithString:NSLocalizedString(@"LOCAL_SERVER_REFRESH",nil)];
+    //set the date and time of refreshing
+    NSDateFormatter *formattedDate = [[NSDateFormatter alloc]init];
+    [formattedDate setDateStyle:NSDateFormatterMediumStyle];
+    [formattedDate setTimeStyle:NSDateFormatterShortStyle];
+    NSString *lastupdated = [NSString stringWithFormat:NSLocalizedString(@"LOCAL_SERVER_LAST_UPDATE",nil),[formattedDate stringFromDate:[NSDate date]]];
+    NSDictionary *attrsDictionary = [NSDictionary dictionaryWithObject:[UIColor whiteColor] forKey:NSForegroundColorAttributeName];
+    _refreshControl.attributedTitle = [[NSAttributedString alloc] initWithString:lastupdated attributes:attrsDictionary];
+
+    [self requestInformationForCurrentPath];
+}
+
+- (void)requestInformationForCurrentPath
+{
+    [_activityIndicator startAnimating];
+    [self.controller requestDirectoryListingAtPath:self.currentPath];
+}
+
+- (void)mediaListUpdated
+{
+    [_activityIndicator stopAnimating];
+    [_refreshControl endRefreshing];
+
+    [self.tableView reloadData];
+
+    [self updateToolbarWithProgress:nil];
+    NSUInteger count = self.controller.currentListFiles.count;
+    if (count == 0)
+        [_numberOfFilesButton setTitle:NSLocalizedString(@"NO_FILES", nil) forState:UIControlStateNormal];
+    else if (count != 1)
+        [_numberOfFilesButton setTitle:[NSString stringWithFormat:NSLocalizedString(@"NUM_OF_FILES", nil), count] forState:UIControlStateNormal];
+    else
+        [_numberOfFilesButton setTitle:NSLocalizedString(@"ONE_FILE", nil) forState:UIControlStateNormal];
+}
+
+- (void)updateToolbarWithProgress:(NSNumber *)progress {
+    if (progress != nil) {
+        _progressView.progressBar.progress = progress.floatValue;
+        [self updateToolbarWithStyle:VLCToolbarStyleProgress];
+    } else if (!self.controller.isAuthorized) {
+        [self updateToolbarWithStyle:VLCToolbarStyleNone];
+    } else if ([self.controller supportSorting]) {
+        [self updateToolbarWithStyle:VLCToolbarStyleSortAndNumOfFiles];
+    } else {
+        [self updateToolbarWithStyle:VLCToolbarStyleNumOfFiles];
+    }
+}
+
+- (void)updateTabBarWithAccessory:(VLCToolbarStyle)style API_AVAILABLE(ios(26.0)) {
+    UIStackView *accessoryViews = [[UIStackView alloc] init];
+    accessoryViews.axis = UILayoutConstraintAxisHorizontal;
+    accessoryViews.alignment = UIStackViewAlignmentCenter;
+    accessoryViews.spacing = 15.0;
+    accessoryViews.translatesAutoresizingMaskIntoConstraints = NO;
+
+    switch (style) {
+        case VLCToolbarStyleNone:
+            break;
+        case VLCToolbarStyleProgress:
+            [accessoryViews addArrangedSubview:_progressView];
+            break;
+        case VLCToolbarStyleSortAndNumOfFiles:
+            [accessoryViews addArrangedSubview:_sortButton];
+            [accessoryViews addArrangedSubview:_numberOfFilesButton];
+            break;
+        case VLCToolbarStyleNumOfFiles:
+            [accessoryViews addArrangedSubview:_numberOfFilesButton];
+            break;
+    }
+
+    UIView *wrapperView = [[UIView alloc] init];
+    wrapperView.translatesAutoresizingMaskIntoConstraints = NO;
+    [wrapperView addSubview:accessoryViews];
+
+    [NSLayoutConstraint activateConstraints:@[
+        [accessoryViews.leadingAnchor constraintEqualToAnchor:wrapperView.leadingAnchor constant:15.0],
+        [accessoryViews.trailingAnchor constraintEqualToAnchor:wrapperView.trailingAnchor constant:-15.0],
+        [accessoryViews.topAnchor constraintEqualToAnchor:wrapperView.topAnchor constant:8.0],
+        [accessoryViews.bottomAnchor constraintEqualToAnchor:wrapperView.bottomAnchor constant:-8.0],
+    ]];
+
+    UITabAccessory *tabAccessory = [[UITabAccessory alloc] initWithContentView:wrapperView];
+
+    dispatch_async(dispatch_get_main_queue(), ^{
+        [self.tabBarController setBottomAccessory:tabAccessory animated:YES];
+    });
+}
+
+- (void)updateToolbarWithStyle:(VLCToolbarStyle)style {
+    if (@available(iOS 26.0, *)) {
+        [self updateTabBarWithAccessory:style];
+    } else {
+        NSMutableArray *items = [NSMutableArray arrayWithObject:[[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemFlexibleSpace target:nil action:nil]];
+        switch(style) {
+            case VLCToolbarStyleNone:
+                break;
+            case VLCToolbarStyleProgress:
+                [items addObjectsFromArray:@[_progressBarButtonItem, [[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemFlexibleSpace target:nil action:nil]]];
+                break;
+            case VLCToolbarStyleSortAndNumOfFiles:
+                [items addObjectsFromArray:@[_sortBarButtonItem, [[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemFlexibleSpace target:nil action:nil]]];
+                // no break to continue to VLCToolbarStyleNumOfFiles
+            case VLCToolbarStyleNumOfFiles:
+                [items addObjectsFromArray:@[_numberOfFilesBarButtonItem, [[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemFlexibleSpace target:nil action:nil]]];
+                break;
+        }
+        [self setToolbarItems:items animated:YES];
+    }
+ }
+
+- (void)updateRemainingTime:(NSString *)time
+{
+    [_progressView updateTime:time];
+}
+
+- (void)currentProgressInformation:(CGFloat)progress
+{
+    [_progressView.progressBar setProgress:progress animated:YES];
+}
+
+- (void)operationWithProgressInformationStarted
+{
+    [self updateToolbarWithProgress:@(0)];
+}
+
+- (void)operationWithProgressInformationStopped
+{
+    [self updateToolbarWithProgress:nil];
+}
+
+#pragma mark - UITableViewDataSources
+
+- (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section
+{
+    return self.controller.currentListFiles.count;
+}
+
+- (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath
+{
+    return [UITableViewCell new];
+}
+
+#pragma mark - UITableViewDelegate
+
+- (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath
+{
+}
+
+- (void)goBack
+{
+    if ([self.currentPath isEqualToString: _initialPath]) {
+        [self.navigationController popViewControllerAnimated:YES];
+        return;
+    }
+    if (((![self.currentPath isEqualToString:@""] && ![self.currentPath isEqualToString:@"/"]) && [self.currentPath length] > 0) && [self.controller isAuthorized]){
+        self.currentPath = [self.currentPath stringByDeletingLastPathComponent];
+        [self requestInformationForCurrentPath];
+    } else {
+        [self.navigationController popViewControllerAnimated:YES];
+    }
+}
+
+- (void)showLoginPanel
+{
+    self.loginToCloudStorageView.frame = self.tableView.frame;
+    self.navigationItem.rightBarButtonItem = nil;
+    [self.tableView addSubview:self.loginToCloudStorageView];
+}
+
+- (void)updateViewAfterSessionChange
+{
+    BOOL hasProgressbar = NO;
+    for (id item in self.toolbarItems) {
+        if (item == _progressBarButtonItem) {
+            hasProgressbar = YES;
+        }
+    }
+    if (!hasProgressbar) {
+        [self updateToolbarWithProgress:nil];
+    }
+    if (_authorizationInProgress || [self.controller isAuthorized]) {
+        if (self.loginToCloudStorageView.superview) {
+            [self.loginToCloudStorageView removeFromSuperview];
+        }
+    }
+    if (![self.controller isAuthorized]) {
+        [_activityIndicator stopAnimating];
+        [self showLoginPanel];
+        return;
+    }
+
+    //  Set right bar buttons after cloud access is authorized
+    if (self.controller.canPlayAll) {
+        self.navigationItem.rightBarButtonItems = @[
+            _logoutButton,
+            [UIBarButtonItem themedPlayAllButtonWithTarget:self andSelector:@selector(playAllAction:)]
+        ];
+    } else {
+        self.navigationItem.rightBarButtonItem = _logoutButton;
+    }
+
+    // Reload if we didn't come back from streaming
+    if (self.currentPath == nil) {
+        self.currentPath = @"";
+    }
+
+    if ([self.controller.currentListFiles count] == 0) {
+        [self requestInformationForCurrentPath];
+    }
+}
+
+- (void)logout
+{
+    _currentPath = nil;
+    [self.controller logout];
+    [self updateViewAfterSessionChange];
+}
+
+- (void)sortButtonClicked:(UIBarButtonItem*)sender
+{
+    [self presentViewController:self->sheet animated:YES completion:^{
+        [self->sheet.collectionView selectItemAtIndexPath:self->manager.selectedIndex animated:NO scrollPosition:UICollectionViewScrollPositionCenteredVertically];
+    }];
+}
+
+- (IBAction)loginAction:(id)sender
+{
+}
+
+- (IBAction)playAllAction:(id)sender
+{
+}
+
+- (UIContextMenuConfiguration *)tableView:(UITableView *)tableView contextMenuConfigurationForRowAtIndexPath:(NSIndexPath *)indexPath point:(CGPoint)point
+{
+     VLCCloudStorageTableViewCell *cell = [tableView cellForRowAtIndexPath:indexPath];
+
+    if (cell.isFavourable == false) {
+        return nil;
+    }
+    
+    UIContextMenuConfiguration *menuConfiguration = [UIContextMenuConfiguration configurationWithIdentifier:nil
+                                                                                            previewProvider:nil
+                                                                                             actionProvider:^UIMenu * _Nullable(NSArray<UIMenuElement *> * _Nonnull suggestedActions) {
+        NSMutableArray* actions = [[NSMutableArray alloc] init];
+
+        NSString *optionTitle = cell.isFavourite ? NSLocalizedString(@"REMOVE_FAVORITE", "") : NSLocalizedString(@"ADD_FAVORITE", "");
+        UIImage *image = cell.isFavourite ? [UIImage systemImageNamed:@"heart"] : [UIImage systemImageNamed:@"heart.fill"];
+
+        [actions addObject:[UIAction actionWithTitle:optionTitle image:image identifier:nil handler:^(__kindof UIAction * _Nonnull action) {
+            cell.isFavourite = !cell.isFavourite;
+            [self triggerFavoriteForCell: cell];
+        }]];
+
+        UIMenu* menu = [UIMenu menuWithTitle:@"" children:actions];
+        return menu;
+    }];
+
+    return menuConfiguration;
+}
+
+- (void)triggerFavoriteForCell:(VLCCloudStorageTableViewCell *)cell
+{
+  // nop
+}
+
+@end

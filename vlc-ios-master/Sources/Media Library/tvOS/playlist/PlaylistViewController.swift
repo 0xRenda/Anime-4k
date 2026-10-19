@@ -1,0 +1,328 @@
+/*****************************************************************************
+ * PlaylistViewController.swift
+ * VLC for iOS
+ *****************************************************************************
+ * Copyright (c) 2023-2026 VideoLAN. All rights reserved.
+ *
+ * Authors: Eshan Singh <eshansingh.dev # gmail.com>
+ *          Felix Paul Kühne <fkuehne # videolan.org>
+ *
+ * Refer to the COPYING file of the official project for license.
+ *****************************************************************************/
+
+import UIKit
+
+class PlaylistViewController: VLCDeletionCapableViewController {
+
+    var playlistCollectionView: UICollectionView!
+    var searchBar: UITextField!
+    var sortButton: UIButton!
+    var VLCCone: UIImageView!
+
+    var medialibraryService: MediaLibraryService
+    var playlistModel: PlaylistModel
+    var medialibObserver: TVModelObserver?
+    var currentlyFocusedIndexPath: IndexPath?
+    var sortingHandler: SortingHandler
+
+    // Searching Properties
+    var didBeginSearching = false
+    var searchedPlaylists = [VLCMLPlaylist]()
+
+    init() {
+        let appCoordinator = VLCAppCoordinator.sharedInstance()
+        medialibraryService = appCoordinator.mediaLibraryService
+        playlistModel = PlaylistModel(medialibrary: medialibraryService)
+        sortingHandler = SortingHandler(playlistModel: playlistModel)
+
+        super.init(nibName: nil, bundle: nil)
+        self.title = playlistModel.indicatorName
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+
+        setupSearchBar()
+        setupSortButton()
+        setupCollectionView()
+        setupEmptyStateView()
+
+        medialibObserver = TVModelObserver(observerDelegate: self, playlistModel: playlistModel)
+        medialibObserver?.observeLibrary()
+
+        navigationController?.navigationBar.isHidden = true
+    }
+
+    // MARK: - Layout
+
+    private func setupSearchBar() {
+        searchBar = UITextField()
+        searchBar.placeholder = NSLocalizedString("SEARCH", comment: "")
+        searchBar.borderStyle = .roundedRect
+        searchBar.textAlignment = .center
+        searchBar.font = UIFont.preferredFont(forTextStyle: .headline)
+        searchBar.delegate = self
+        searchBar.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(searchBar)
+
+        NSLayoutConstraint.activate([
+            searchBar.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 40),
+            searchBar.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            searchBar.widthAnchor.constraint(equalToConstant: 654),
+            searchBar.heightAnchor.constraint(equalToConstant: 70),
+        ])
+    }
+
+    private func setupSortButton() {
+        sortButton = UIButton(type: .system)
+        sortButton.setImage(UIImage(named: "sort"), for: .normal)
+        sortButton.addTarget(self, action: #selector(sortPlaylist(_:)), for: .primaryActionTriggered)
+        sortButton.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(sortButton)
+
+        NSLayoutConstraint.activate([
+            sortButton.centerYAnchor.constraint(equalTo: searchBar.centerYAnchor),
+            sortButton.trailingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.trailingAnchor, constant: -50),
+            sortButton.heightAnchor.constraint(equalToConstant: 70),
+        ])
+    }
+
+    private func setupCollectionView() {
+        let flowLayout = UICollectionViewFlowLayout()
+        let inset: CGFloat = 50.0
+        flowLayout.sectionInset = UIEdgeInsets(top: inset, left: inset, bottom: inset, right: inset)
+        flowLayout.itemSize = VLCMovieTVCollectionViewCell.cellSize()
+        flowLayout.minimumInteritemSpacing = 48.0
+        flowLayout.minimumLineSpacing = 80.0
+
+        playlistCollectionView = UICollectionView(frame: .zero, collectionViewLayout: flowLayout)
+        playlistCollectionView.dataSource = self
+        playlistCollectionView.delegate = self
+        playlistCollectionView.register(VLCMovieTVCollectionViewCell.self,
+                                        forCellWithReuseIdentifier: VLCMovieTVCollectionViewCellIdentifier)
+        playlistCollectionView.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(playlistCollectionView)
+
+        NSLayoutConstraint.activate([
+            playlistCollectionView.topAnchor.constraint(equalTo: searchBar.bottomAnchor, constant: 30),
+            playlistCollectionView.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 30),
+            playlistCollectionView.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -30),
+            playlistCollectionView.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -20),
+        ])
+    }
+
+    private func setupEmptyStateView() {
+        VLCCone = UIImageView(image: UIImage(named: "cone"))
+        VLCCone.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(VLCCone)
+
+        NSLayoutConstraint.activate([
+            VLCCone.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            VLCCone.centerYAnchor.constraint(equalTo: view.centerYAnchor),
+        ])
+    }
+
+    @objc func sortPlaylist(_ sender: UIButton) {
+        sortingHandler.constructSortAlert(playlistView: self)
+    }
+
+    private func playlist(at index: Int) -> VLCMLPlaylist {
+        if didBeginSearching {
+            return searchedPlaylists[index]
+        }
+        playlistModel.fileArrayLock.lock()
+        defer { playlistModel.fileArrayLock.unlock() }
+        return playlistModel.files[index]
+    }
+}
+
+// MARK: - UICollectionViewDataSource
+
+extension PlaylistViewController: UICollectionViewDataSource {
+
+    func collectionView(_ collectionView: UICollectionView, numberOfItemsInSection section: Int) -> Int {
+        let count: Int
+        if didBeginSearching {
+            count = searchedPlaylists.count
+        } else {
+            playlistModel.fileArrayLock.lock()
+            count = playlistModel.files.count
+            playlistModel.fileArrayLock.unlock()
+        }
+
+        VLCCone.isHidden = count >= 1
+        searchBar.isHidden = count < 1
+        sortButton.isHidden = count < 1
+
+        return count
+    }
+
+    func collectionView(_ collectionView: UICollectionView, cellForItemAt indexPath: IndexPath) -> UICollectionViewCell {
+        let cell = collectionView.dequeueReusableCell(withReuseIdentifier: VLCMovieTVCollectionViewCellIdentifier, for: indexPath) as! VLCMovieTVCollectionViewCell
+        let playlist = playlist(at: indexPath.row)
+        cell.titleLabel.text = playlist.title()
+        cell.descriptionLabel.text = playlist.numberOfTracksString() + " · " + playlist.durationString()
+        cell.thumbnailView.image = playlist.thumbnailImage()
+        return cell
+    }
+}
+
+// MARK: - UICollectionViewDelegate
+
+extension PlaylistViewController: UICollectionViewDelegate {
+
+    func collectionView(_ collectionView: UICollectionView, didSelectItemAt indexPath: IndexPath) {
+        let playlistMediaViewController = PlaylistMediaViewController()
+        playlistMediaViewController.playlist = playlist(at: indexPath.row)
+        present(playlistMediaViewController, animated: true)
+    }
+
+    func collectionView(_ collectionView: UICollectionView, willDisplay cell: UICollectionViewCell, forItemAt indexPath: IndexPath) {
+        guard !didBeginSearching else { return }
+        playlistModel.fileArrayLock.lock()
+        let totalCount = playlistModel.files.count
+        playlistModel.fileArrayLock.unlock()
+        if totalCount > 0 && indexPath.row >= totalCount - Int(kVLCPrefetchDistance) {
+            playlistModel.getMedia()
+        }
+    }
+
+    func collectionView(_ collectionView: UICollectionView, shouldUpdateFocusIn context: UICollectionViewFocusUpdateContext) -> Bool {
+        if isEditing {
+            return context.nextFocusedIndexPath == nil
+        }
+        return true
+    }
+
+    func collectionView(_ collectionView: UICollectionView, didUpdateFocusIn context: UICollectionViewFocusUpdateContext, with coordinator: UIFocusAnimationCoordinator) {
+        if let nextPath = context.nextFocusedIndexPath {
+            isEditing = false
+            currentlyFocusedIndexPath = nextPath
+        }
+    }
+}
+
+// MARK: - Editing
+
+extension PlaylistViewController {
+
+    override var indexPathToDelete: IndexPath? {
+        return currentlyFocusedIndexPath
+    }
+
+    override var itemToDelete: String? {
+        guard let indexPath = indexPathToDelete else { return "" }
+        return playlist(at: indexPath.row).name
+    }
+
+    override func deleteFile(atIndex indexPathToDelete: IndexPath?) {
+        super.deleteFile(atIndex: indexPathToDelete)
+
+        guard let indexPathToDelete = indexPathToDelete else { return }
+
+        let row = indexPathToDelete.row
+        let playlistToDelete = playlist(at: row)
+        if didBeginSearching {
+            searchedPlaylists.remove(at: row)
+        }
+        playlistModel.delete([playlistToDelete])
+        didBeginSearching = false
+        searchBar.text = ""
+        isEditing = false
+        playlistCollectionView.reloadData()
+    }
+
+    override func renameFile(atIndex indexPathToRename: IndexPath?) {
+        super.renameFile(atIndex: indexPathToRename)
+
+        guard let indexPathToRename = indexPathToRename else { return }
+
+        let mediaToRename = playlist(at: indexPathToRename.row)
+        let currentTitle = mediaToRename.name
+
+        let alertTitle = String(format: NSLocalizedString("RENAME_MEDIA_TO", comment: ""), currentTitle)
+        let renameAlert = UIAlertController(title: alertTitle, message: nil, preferredStyle: .alert)
+
+        renameAlert.addTextField { textField in
+            textField.text = currentTitle
+            textField.placeholder = NSLocalizedString("PLAYLIST_PLACEHOLDER", comment: "")
+            textField.textColor = .black
+            textField.keyboardAppearance = .light
+        }
+
+        let cancelAction = UIAlertAction(title: NSLocalizedString("BUTTON_CANCEL", comment: ""), style: .cancel, handler: nil)
+
+        let confirmAction = UIAlertAction(title: NSLocalizedString("BUTTON_DONE", comment: ""), style: .default) { _ in
+            if let textField = renameAlert.textFields?.first,
+               let newName = textField.text,
+               !newName.isEmpty {
+                mediaToRename.updateName(newName)
+                self.playlistCollectionView.reloadData()
+            }
+        }
+
+        renameAlert.addAction(confirmAction)
+        renameAlert.addAction(cancelAction)
+
+        present(renameAlert, animated: true, completion: nil)
+    }
+
+    override var isEditing: Bool {
+        didSet {
+            super.isEditing = isEditing
+
+            if let indexPath = currentlyFocusedIndexPath,
+               let focusedCell = playlistCollectionView.cellForItem(at: indexPath) {
+                if isEditing {
+                    focusedCell.layer.add(CAAnimation.vlc_wiggleAnimationwithSoftMode(true), forKey: VLCWiggleAnimationKey)
+                } else {
+                    focusedCell.layer.removeAnimation(forKey: VLCWiggleAnimationKey)
+                }
+            }
+        }
+    }
+}
+
+// MARK: - MediaLibraryDelegate
+
+extension PlaylistViewController: MediaLibraryDelegate {
+    func refreshCollection() {
+        DispatchQueue.main.async {
+            self.playlistCollectionView.reloadData()
+        }
+    }
+}
+
+// MARK: - UITextFieldDelegate
+
+extension PlaylistViewController: UITextFieldDelegate {
+
+    func textFieldDidEndEditing(_ textField: UITextField) {
+        searchedPlaylists.removeAll()
+        sortButton.isHidden = true
+
+        if textField.text?.isEmpty ?? true {
+            didBeginSearching = false
+            sortButton.isHidden = false
+            playlistCollectionView.reloadData()
+            return
+        }
+
+        didBeginSearching = true
+
+        playlistModel.fileArrayLock.lock()
+        let currentFiles = playlistModel.files
+        playlistModel.fileArrayLock.unlock()
+        for playlist in currentFiles {
+            if playlist.contains(textField.text!) {
+                searchedPlaylists.append(playlist)
+            }
+        }
+
+        playlistCollectionView.reloadData()
+    }
+}

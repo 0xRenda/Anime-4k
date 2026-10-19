@@ -1,0 +1,793 @@
+/*****************************************************************************
+ * QueueViewController.swift
+ *
+ * Copyright © 2020-2026 VLC authors and VideoLAN
+ *
+ * Authors: Soomin Lee <bubu@mikan.io>
+ *          Edgar Fouillet <vlc # edgar.fouillet.eu>
+ *          Diogo Simao Marques <dogo@videolabs.io>
+ *          Pratik Ray <raypratik365@gmail.com>
+ *
+ * Refer to the COPYING file of the official project for license.
+ *****************************************************************************/
+
+extension Notification.Name {
+    static let VLCDidAppendMediaToQueue = Notification.Name("didAppendMediaToQueue")
+    static let VLCDidRemoveMediaFromQueue = Notification.Name("didRemoveMediaFromQueue")
+}
+
+@objc(VLCQueueViewControllerDelegate)
+protocol QueueViewControllerDelegate {
+    @objc optional func queueViewControllerDidDisappear(_ queueViewController: QueueViewController?)
+}
+
+class QueueViewFlowLayout: UICollectionViewFlowLayout {
+    override init() {
+        super.init()
+        self.minimumLineSpacing = 10
+        self.minimumInteritemSpacing = 0
+        self.sectionHeadersPinToVisibleBounds = true
+        self.scrollDirection = .vertical
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override func shouldInvalidateLayout(forBoundsChange newBounds: CGRect) -> Bool {
+        return true
+    }
+}
+
+@objc(VLCQueueViewController)
+class QueueViewController: UIViewController {
+    @IBOutlet weak var queueCollectionView: UICollectionView!
+    @IBOutlet weak var topView: UIVisualEffectView!
+    @IBOutlet weak var grabberView: UIView!
+    @IBOutlet weak var artworkBlurView: UIVisualEffectView!
+    @IBOutlet weak var closeButton: UIButton!
+
+    private var scrolledCellIndex: IndexPath = IndexPath()
+
+    private let sidePadding: CGFloat = 10
+    private let topPadding: CGFloat = 8
+    private let bottomPadding: CGFloat = 8
+    private let liquidGlassSpacing: CGFloat = 8
+    private let liquidGlassCornerRadius: CGFloat = 24
+    private let legacyCornerRadius: CGFloat = 4
+
+    private let darkOverlayAlpha: CGFloat = 0.6
+
+    private var playbackService: PlaybackService {
+        get {
+            PlaybackService.sharedInstance()
+        }
+    }
+
+    private var mediaList: VLCMediaList {
+        get {
+            playbackService.isShuffleMode ? PlaybackService.sharedInstance().shuffledList : PlaybackService.sharedInstance().mediaList
+        }
+    }
+
+    private var currentlyPlayingMedia: VLCMedia?
+
+    private let medialibraryService: MediaLibraryService
+
+    private lazy var collectionViewLayout = QueueViewFlowLayout()
+    private var constraints: [NSLayoutConstraint] = []
+    private var topConstraint: NSLayoutConstraint?
+    private var topConstraintConstant: CGFloat {
+        if parent is VideoPlayerViewController {
+            return view.safeAreaInsets.bottom > 0 ? 75 : 50
+        } else {
+            return 0
+        }
+    }
+    var bottomConstraint: NSLayoutConstraint?
+
+    var heightConstraint: NSLayoutConstraint?
+
+    private var darkOverlayView: UIView = UIView()
+    private var darkOverlayViewConstraints: [NSLayoutConstraint] = []
+    static var queueTextColor: UIColor {
+        if #available(iOS 26.0, *) {
+            return .label
+        }
+        return PresentationTheme.darkTheme.colors.cellTextColor
+    }
+
+    private static var queueDetailTextColor: UIColor {
+        if #available(iOS 26.0, *) {
+            return .secondaryLabel
+        }
+        return PresentationTheme.darkTheme.colors.cellDetailTextColor
+    }
+
+    private static var queueDragPreviewBackgroundColor: UIColor {
+        if #available(iOS 26.0, *) {
+            return .systemBackground
+        }
+        return PresentationTheme.darkTheme.colors.background
+    }
+
+    private var contentInset: CGFloat {
+        if #available(iOS 26.0, *) {
+            return liquidGlassSpacing
+        }
+        return 0
+    }
+
+    private let animationDuration = 0.2
+
+    @objc weak var delegate: QueueViewControllerDelegate?
+
+    override var preferredStatusBarStyle: UIStatusBarStyle {
+        return PresentationTheme.darkTheme.colors.statusBarStyle
+    }
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        initViews()
+
+        let defaultCenter: NotificationCenter = NotificationCenter.default
+        defaultCenter.addObserver(self,
+                                  selector: #selector(themeDidChange),
+                                  name: .VLCThemeDidChangeNotification,
+                                  object: nil)
+#if os(iOS)
+        defaultCenter.addObserver(self,
+                                  selector: #selector(deviceOrientationDidChange),
+                                  name: UIDevice.orientationDidChangeNotification,
+                                  object: nil)
+#endif
+        defaultCenter.addObserver(self,
+                                  selector: #selector(reload),
+                                  name: Notification.Name(VLCPlaybackServiceShuffleModeUpdated),
+                                  object: nil)
+        for name in [VLCPlaybackServicePlaybackDidMoveOnToNextItem,
+                     VLCPlaybackServicePlaybackDidResume,
+                     VLCPlaybackServicePlaybackDidPause] {
+            defaultCenter.addObserver(self,
+                                      selector: #selector(reload),
+                                      name: Notification.Name(name),
+                                      object: nil)
+        }
+    }
+
+    override func viewWillDisappear(_ animated: Bool) {
+        super.viewWillDisappear(animated)
+        if let delegate = delegate as? VideoPlayerViewController {
+            delegate.queueViewControllerDidDisappear(self)
+        }
+    }
+
+    override func viewDidDisappear(_ animated: Bool) {
+        super.viewDidDisappear(animated)
+        view.alpha = 0.0
+        topView.isHidden = true
+    }
+
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+    }
+
+    override func didMove(toParent parent: UIViewController?) {
+        let playerDisplayController = parent as? VLCPlayerDisplayController
+
+        if let parent = parent {
+            parent.view.addSubview(darkOverlayView)
+
+            let overlayBottomAnchor = playerDisplayController?.realBottomAnchor ?? parent.view.bottomAnchor
+            darkOverlayViewConstraints = [
+                darkOverlayView.topAnchor.constraint(equalTo: parent.view.topAnchor),
+                darkOverlayView.leadingAnchor.constraint(equalTo: parent.view.leadingAnchor),
+                darkOverlayView.trailingAnchor.constraint(equalTo: parent.view.trailingAnchor),
+                darkOverlayView.bottomAnchor.constraint(equalTo: overlayBottomAnchor)
+            ]
+
+            if let heightConstraint = heightConstraint {
+                view.removeConstraint(heightConstraint)
+            }
+
+            var miniPlayerView: AudioMiniPlayer?
+            if let playerDisplayController,
+               let miniPlaybackView = playerDisplayController.miniPlaybackView as? AudioMiniPlayer {
+                grabberView.isHidden = true
+                closeButton.isHidden = true
+                playerDisplayController.view.bringSubviewToFront(miniPlaybackView)
+                topConstraint = view.topAnchor.constraint(equalTo: miniPlaybackView.bottomAnchor)
+                heightConstraint = nil
+                let bottomAnchor = playerDisplayController.realBottomAnchor
+                    ?? playerDisplayController.view.safeAreaLayoutGuide.bottomAnchor
+                bottomConstraint = view.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -contentInset)
+                miniPlayerView = miniPlaybackView
+            } else {
+                grabberView.isHidden = false
+                closeButton.isHidden = false
+                if let parent = parent as? VideoPlayerViewController {
+                    topConstraint = nil
+                    heightConstraint = view.heightAnchor.constraint(equalTo: parent.view.heightAnchor,
+                                                                    constant: -(topConstraintConstant + parent.videoPlayerControls.frame.height + parent.mediaScrubProgressBar.frame.height))
+                    bottomConstraint = view.bottomAnchor.constraint(equalTo: parent.view.bottomAnchor,
+                                                                    constant: self.view.frame.height)
+                } else if let parent = parent as? AudioPlayerViewController {
+                    heightConstraint = nil
+                    grabberView.isHidden = true
+                    closeButton.isHidden = true
+                    topConstraint = view.topAnchor.constraint(equalTo: parent.audioPlayerView.playqueueView.topAnchor)
+                    bottomConstraint = view.bottomAnchor.constraint(equalTo: parent.audioPlayerView.playqueueView.bottomAnchor)
+                    darkOverlayView.isHidden = true
+                } else {
+                    topConstraint = view.topAnchor.constraint(equalTo: parent.view.bottomAnchor)
+                    heightConstraint = nil
+                    bottomConstraint = view.bottomAnchor.constraint(equalTo: parent.view.bottomAnchor)
+                }
+            }
+
+            parent.view.addSubview(view)
+
+            let safeArea = miniPlayerView?.safeAreaLayoutGuide ?? parent.view.safeAreaLayoutGuide
+            view.overrideUserInterfaceStyle = playerDisplayController != nil ? .unspecified : .dark
+            configureAppearance()
+
+            constraints = [
+                view.leadingAnchor.constraint(equalTo: safeArea.leadingAnchor, constant: contentInset),
+                view.trailingAnchor.constraint(equalTo: safeArea.trailingAnchor, constant: -contentInset)
+            ]
+
+            if let topConstraint = topConstraint {
+                constraints.append(topConstraint)
+            }
+            if let heightConstraint = heightConstraint {
+                constraints.append(heightConstraint)
+            }
+            if let bottomConstraint = bottomConstraint {
+                constraints.append(bottomConstraint)
+            }
+
+            NSLayoutConstraint.activate(darkOverlayViewConstraints)
+            NSLayoutConstraint.activate(constraints)
+            view.layoutIfNeeded()
+            reload()
+        }
+    }
+
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+
+        topConstraint?.constant = topConstraintConstant
+        reload()
+    }
+
+    @objc init(medialibraryService: MediaLibraryService) {
+        self.medialibraryService = medialibraryService
+        super.init(nibName: nil, bundle: nil)
+        view.alpha = 0.0
+    }
+
+    @objc func show() {
+        UIView.animate(withDuration: animationDuration, animations: {
+            self.view.alpha = 1.0
+            self.darkOverlayView.isHidden = false
+        }) { _ in
+            self.scrollToCurrentlyPlaying()
+        }
+    }
+
+    @objc func hide() {
+        if let parent = parent as? VLCPlayerDisplayController {
+            guard !parent.hintingPlayqueue else {
+                return
+            }
+        }
+        UIView.animate(withDuration: animationDuration, animations: {
+            self.view.alpha = 0.0
+            self.darkOverlayView.isHidden = true
+        })
+    }
+
+    private func scrollToCurrentlyPlaying() {
+        guard let currentMedia = playbackService.currentlyPlayingMedia else {
+            return
+        }
+
+        let currentIndex = mediaList.index(of: currentMedia)
+
+        guard currentIndex != NSNotFound else {
+            return
+        }
+
+        guard currentIndex < mediaList.count else {
+            return
+        }
+
+        let currentIndexPath = IndexPath(row: Int(currentIndex), section: 0)
+
+        // Dispatch the scrolling operation to the main queue to ensure UI updates are processed first
+        DispatchQueue.main.async {
+            self.queueCollectionView.scrollToItem(at: currentIndexPath, at: .centeredVertically, animated: true)
+        }
+    }
+
+    required init?(coder aDecoder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    @IBAction func didDrag(_ sender: UIPanGestureRecognizer) {
+        switch sender.state {
+        case .changed:
+            dragStateDidChange(sender)
+        case .ended:
+            dragDidEnd(sender)
+        default:
+            break
+        }
+    }
+
+    func dragStateDidChange(_ sender: UIPanGestureRecognizer) {
+        let translation = sender.translation(in: parent?.view)
+        if let bottomConstraint = bottomConstraint {
+            bottomConstraint.constant = max(0.0, bottomConstraint.constant + translation.y)
+        }
+        sender.setTranslation(CGPoint.zero, in: parent?.view)
+        if let parent = parent as? VideoPlayerViewController {
+            darkOverlayView.alpha = max(0.0, darkOverlayAlpha - view.frame.minY / parent.view.frame.maxY)
+        }
+    }
+
+    func dragDidEnd(_ sender: UIPanGestureRecognizer) {
+        if let parent = parent {
+            if self.view.frame.minY > parent.view.frame.maxY / 2 {
+                dismissPlayqueue()
+            } else {
+                showPlayqueue()
+            }
+        }
+    }
+
+    private func showPlayqueue() {
+        bottomConstraint?.constant = 0
+        UIView.animate(withDuration: animationDuration, animations: {
+            self.parent?.view.layoutIfNeeded()
+        })
+    }
+
+    func dismissFromAudioPlayer() {
+        UIView.animate(withDuration: animationDuration, animations: {
+            self.view.alpha = 0.0
+        }, completion: { _ in
+            self.view.removeFromSuperview()
+            self.removeFromParent()
+        })
+    }
+
+    @objc func dismissPlayqueue() {
+        if let parent = parent {
+            bottomConstraint?.constant = view.frame.height - view.safeAreaInsets.bottom
+            UIView.animate(withDuration: animationDuration, animations: {
+                parent.view.layoutIfNeeded()
+            }, completion: { _ in
+                self.dismissPlayqueueCompletion(in: parent)
+            })
+        }
+    }
+
+    func dismissPlayqueueCompletion(in parent: UIViewController) {
+        view.alpha = 0.0
+        view.removeFromSuperview()
+        removeFromParent()
+        darkOverlayView.isHidden = true
+        darkOverlayView.alpha = darkOverlayAlpha
+    }
+
+    @objc func deviceOrientationDidChange(_ notification: Notification) {
+        queueCollectionView.collectionViewLayout.invalidateLayout()
+    }
+
+    @objc func reload() {
+        currentlyPlayingMedia = playbackService.currentlyPlayingMedia
+        queueCollectionView.reloadData()
+        queueCollectionView.collectionViewLayout.invalidateLayout()
+    }
+}
+
+// MARK: - Private initializers
+
+private extension QueueViewController {
+    private func initViews() {
+        Bundle.main.loadNibNamed("QueueView", owner: self, options: nil)
+
+        view.backgroundColor = .clear
+
+        view.translatesAutoresizingMaskIntoConstraints = false
+        initDarkOverlayView()
+        initQueueCollectionView()
+        topView.alpha = 0.1
+        themeDidChange()
+        grabberView.layer.cornerRadius = 2.5
+
+        closeButton.setTitle("", for: .normal)
+        closeButton.tintColor = .white
+        closeButton.addTarget(self, action: #selector(dismissPlayqueue), for: .touchUpInside)
+        closeButton.layer.cornerRadius = 12
+    }
+
+    private func initDarkOverlayView() {
+        if #available(iOS 26.0, *) {
+            darkOverlayView.backgroundColor = .clear
+        } else {
+            darkOverlayView.backgroundColor = .black
+        }
+        darkOverlayView.alpha = darkOverlayAlpha
+        darkOverlayView.isHidden = true
+        darkOverlayView.isUserInteractionEnabled = true
+        darkOverlayView.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(dismissPlayqueue)))
+        darkOverlayView.translatesAutoresizingMaskIntoConstraints = false
+    }
+
+    private func initQueueCollectionView() {
+        view.layer.masksToBounds = true
+        view.layer.cornerRadius = legacyCornerRadius
+        queueCollectionView.translatesAutoresizingMaskIntoConstraints = false
+        let cellNib = UINib(nibName: MediaCollectionViewCell.nibName, bundle: nil)
+        queueCollectionView.register(cellNib,
+                                     forCellWithReuseIdentifier: MediaCollectionViewCell.defaultReuseIdentifier)
+        queueCollectionView.delegate = self
+        queueCollectionView.dataSource = self
+        queueCollectionView.dragDelegate = self
+        queueCollectionView.dropDelegate = self
+        queueCollectionView.dragInteractionEnabled = true
+        queueCollectionView.collectionViewLayout = collectionViewLayout
+        queueCollectionView.backgroundColor = .clear
+    }
+
+    private func configureAppearance() {
+        if #available(iOS 26.0, visionOS 26.0, *) {
+            let corners = UICornerConfiguration.uniformCorners(radius: .fixed(liquidGlassCornerRadius))
+#if !os(visionOS)
+            let glassEffect = UIGlassEffect(style: .regular)
+            glassEffect.isInteractive = false
+            artworkBlurView.effect = glassEffect
+#endif
+            artworkBlurView.cornerConfiguration = corners
+            queueCollectionView.cornerConfiguration = corners
+            view.cornerConfiguration = corners
+            view.layer.cornerRadius = 0
+            view.layer.masksToBounds = false
+            return
+        }
+
+        artworkBlurView.effect = UIBlurEffect(style: .dark)
+        view.layer.masksToBounds = true
+        view.layer.cornerRadius = legacyCornerRadius
+        queueCollectionView.layer.cornerRadius = 0
+    }
+}
+
+// MARK: - Private handlers
+
+private extension QueueViewController {
+    @objc private func themeDidChange() {
+#if os(iOS)
+        setNeedsStatusBarAppearanceUpdate()
+#endif
+    }
+
+    private func updateCollectionViewCellAppearance(_ cell: MediaCollectionViewCell) {
+        let detailTextColor = QueueViewController.queueDetailTextColor
+
+        cell.tintColor = cell.isMediaBeingPlayed ? PresentationTheme.current.colors.orangeUI : detailTextColor
+        cell.sizeDescriptionLabel.textColor = detailTextColor
+        cell.dragIndicatorImageView.tintColor = detailTextColor
+
+        cell.titleLabel.backgroundColor = .clear
+        cell.sizeDescriptionLabel.backgroundColor = .clear
+    }
+
+    private func dragPreviewParameters(for indexPath: IndexPath) -> UIDragPreviewParameters? {
+        guard let cell = queueCollectionView.cellForItem(at: indexPath) else {
+            return nil
+        }
+
+        let parameters = UIDragPreviewParameters()
+        parameters.backgroundColor = QueueViewController.queueDragPreviewBackgroundColor.resolvedColor(with: cell.traitCollection)
+        return parameters
+    }
+
+    @objc private func dismissView() {
+        guard let delegate = delegate as? VideoPlayerViewController else {
+            return
+        }
+
+        dismiss(animated: true) {
+            [weak self] in
+            delegate.queueViewControllerDidDisappear(self)
+        }
+    }
+}
+
+// MARK: - UICollectionViewFlowLayout
+
+extension QueueViewController: UICollectionViewDelegateFlowLayout {
+    func collectionView(_ collectionView: UICollectionView,
+                        layout collectionViewLayout: UICollectionViewLayout,
+                        sizeForItemAt indexPath: IndexPath) -> CGSize {
+        let padding = sidePadding + 5.0
+        return MediaCollectionViewCell.cellSizeForWidth(collectionView.frame.width - padding,
+                                                        safeAreaInsets: collectionView.safeAreaInsets)
+    }
+
+    func collectionView(_ collectionView: UICollectionView,
+                        layout collectionViewLayout: UICollectionViewLayout,
+                        insetForSectionAt section: Int) -> UIEdgeInsets {
+        let grabberHeight = topView.isHidden ? 0 : topView.frame.height
+        let leftInset = 5.0
+        return UIEdgeInsets(top: topPadding + grabberHeight, left: leftInset, bottom: bottomPadding, right: sidePadding)
+    }
+}
+
+// MARK: - UICollectionViewDelegate / MediaCollectionViewCellDelegate
+
+extension QueueViewController: UICollectionViewDelegate, MediaCollectionViewCellDelegate {
+    private func selectedItem(in collectionView: UICollectionView, at indexPath: IndexPath) {
+        guard indexPath.row <= mediaList.count else {
+            assertionFailure("QueueViewController: didSelectItemAt: IndexPath out of range.")
+            return
+        }
+
+        playbackService.playItem(at: UInt(indexPath.row))
+
+        guard let cell = collectionView.cellForItem(at: indexPath) as? MediaCollectionViewCell else {
+            assertionFailure("QueueViewController: didSelectItemAt: Cell not a MediaCollectionViewCell")
+            return
+        }
+
+        cell.setNowPlaying(true)
+        reload()
+    }
+
+    func collectionView(_ collectionView: UICollectionView, didSelectItemAt indexPath: IndexPath) {
+        selectedItem(in: collectionView, at: indexPath)
+    }
+
+    func mediaCollectionViewCellHandleDelete(of cell: MediaCollectionViewCell) {
+        guard let indexPath = queueCollectionView.indexPath(for: cell) else {
+            return
+        }
+        resetScrollView({ _ in
+            let removedMedia = VLCMLMedia(forPlaying: self.mediaList.media(at: UInt(indexPath.row)))
+
+            NotificationCenter.default.post(name: .VLCDidRemoveMediaFromQueue, object: nil)
+
+            self.handleRemoveCurrentMediaIfNeeded(removedMedia, at: indexPath)
+        })
+    }
+
+    func mediaCollectionViewCellMediaTapped(in cell: MediaCollectionViewCell) {
+        guard let indexPath = queueCollectionView.indexPath(for: cell) else {
+            return
+        }
+        selectedItem(in: queueCollectionView, at: indexPath)
+    }
+
+    func mediaCollectionViewCellSetScrolledCellIndex(of cell: MediaCollectionViewCell?) {
+        if let cell = cell {
+            guard let indexPath = queueCollectionView.indexPath(for: cell) else {
+                return
+            }
+
+            scrolledCellIndex = indexPath
+        }
+    }
+
+    func mediaCollectionViewCellGetScrolledCell() -> MediaCollectionViewCell? {
+        if scrolledCellIndex.isEmpty {
+            return nil
+        }
+
+        let cell = queueCollectionView.cellForItem(at: scrolledCellIndex)
+        if let cell = cell as? MediaCollectionViewCell {
+            return cell
+        }
+
+        return nil
+    }
+
+    func mediaCollectionViewCellGetModel() -> MediaLibraryBaseModel? {
+        return nil
+    }
+}
+
+// MARK: - UIScrollViewDelegate
+
+extension QueueViewController: UIScrollViewDelegate {
+    func scrollViewDidScroll(_ scrollView: UIScrollView) {
+        if scrollView.contentOffset.y <= 5.0 {
+            topView.alpha = max(0.1, scrollView.contentOffset.y / 5)
+        } else {
+            topView.alpha = 1.0
+        }
+    }
+
+    private func resetScrollView(_ completion: ((Bool) -> Void)? = nil) {
+        if let mediaCell = mediaCollectionViewCellGetScrolledCell() {
+            mediaCell.resetScrollView(completion)
+        }
+    }
+
+    func scrollViewWillBeginDragging(_ scrollView: UIScrollView) {
+        resetScrollView()
+    }
+}
+
+// MARK: - UICollectionViewDataSource
+
+extension QueueViewController: UICollectionViewDataSource {
+    func numberOfSections(in collectionView: UICollectionView) -> Int {
+        return 1
+    }
+
+    func collectionView(_ collectionView: UICollectionView,
+                        numberOfItemsInSection section: Int) -> Int {
+        return mediaList.count
+    }
+
+    func collectionView(_ collectionView: UICollectionView,
+                        cellForItemAt indexPath: IndexPath) -> UICollectionViewCell {
+        guard let cell =
+                collectionView.dequeueReusableCell(withReuseIdentifier: MediaCollectionViewCell.defaultReuseIdentifier,
+                                                   for: indexPath) as? MediaCollectionViewCell else {
+            return UICollectionViewCell()
+        }
+
+        guard indexPath.row <= mediaList.count else {
+            assertionFailure("QueueViewController: cellForItemAt: IndexPath out of range.")
+            return UICollectionViewCell()
+        }
+
+        cell.delegate = self
+
+        var media: VLCMedia?
+
+        cell.thumbnailWidth.constant = MediaCollectionViewCell.getDefaultConstant()
+
+        cell.ignoreThemeDidChange = true
+        cell.setTheme(to: PresentationTheme.darkTheme)
+        cell.backgroundColor = .clear
+        cell.scrollContentView.backgroundColor = .clear
+
+        cell.isEditing = false
+        cell.dragIndicatorImageView.isHidden = collectionView.numberOfItems(inSection: 0) <= 1
+        media = mediaList.media(at: UInt(indexPath.row))
+
+        guard let safeURL = media?.url else {
+            assertionFailure("QueueViewController: cellForItemAt: Failed to fetch media url")
+            return cell
+        }
+        if let media = medialibraryService.fetchOrCreateMedia(with: safeURL) {
+            cell.media = media
+        }
+
+        let isCurrentlyPlaying = media == currentlyPlayingMedia
+        cell.setNowPlaying(isCurrentlyPlaying)
+        updateCollectionViewCellAppearance(cell)
+        cell.newLabel.isHidden = true
+
+        return cell
+    }
+}
+
+// MARK: - UICollectionViewDragDelegate
+
+extension QueueViewController: UICollectionViewDragDelegate {
+    func collectionView(_ collectionView: UICollectionView,
+                        itemsForBeginning session: UIDragSession,
+                        at indexPath: IndexPath) -> [UIDragItem] {
+        guard mediaList.count > 1 else {
+            return []
+        }
+
+        return [UIDragItem(itemProvider: NSItemProvider())]
+    }
+
+    func collectionView(_ collectionView: UICollectionView,
+                        dragSessionIsRestrictedToDraggingApplication session: UIDragSession) -> Bool {
+        return true
+    }
+
+    func collectionView(_ collectionView: UICollectionView,
+                        dragPreviewParametersForItemAt indexPath: IndexPath) -> UIDragPreviewParameters? {
+        return dragPreviewParameters(for: indexPath)
+    }
+}
+
+// MARK: - UICollectionViewDropDelegate
+
+extension QueueViewController: UICollectionViewDropDelegate {
+    func collectionView(_ collectionView: UICollectionView, canHandle session: UIDropSession) -> Bool {
+        return session.localDragSession != nil
+    }
+
+    func collectionView(_ collectionView: UICollectionView,
+                        dropSessionDidUpdate session: UIDropSession,
+                        withDestinationIndexPath destinationIndexPath: IndexPath?) -> UICollectionViewDropProposal {
+        guard collectionView.hasActiveDrag else {
+            return UICollectionViewDropProposal(operation: .cancel)
+        }
+
+        return UICollectionViewDropProposal(operation: .move, intent: .insertAtDestinationIndexPath)
+    }
+
+    func collectionView(_ collectionView: UICollectionView,
+                        performDropWith coordinator: UICollectionViewDropCoordinator) {
+        guard let item = coordinator.items.first,
+              let sourceIndexPath = item.sourceIndexPath else {
+            return
+        }
+
+        let mediaList = self.mediaList
+        let destinationIndexPath = coordinator.destinationIndexPath ?? IndexPath(row: mediaList.count - 1, section: 0)
+        guard sourceIndexPath.row < mediaList.count,
+              destinationIndexPath.row < mediaList.count else {
+            return
+        }
+
+        collectionView.performBatchUpdates({
+            mediaList.lock()
+            defer { mediaList.unlock() }
+            guard let media = mediaList.media(at: UInt(sourceIndexPath.row)),
+                  mediaList.removeMedia(at: UInt(sourceIndexPath.row)) else {
+                return
+            }
+            mediaList.insert(media, at: UInt(destinationIndexPath.row))
+            collectionView.moveItem(at: sourceIndexPath, to: destinationIndexPath)
+        })
+
+        coordinator.drop(item.dragItem, toItemAt: destinationIndexPath).addCompletion { _ in
+            (collectionView.cellForItem(at: destinationIndexPath) as? MediaCollectionViewCell)?.animateCurrentlyPlayingState()
+        }
+    }
+
+    func collectionView(_ collectionView: UICollectionView,
+                        dropPreviewParametersForItemAt indexPath: IndexPath) -> UIDragPreviewParameters? {
+        return dragPreviewParameters(for: indexPath)
+    }
+}
+
+// MARK: - Media Collection View Cell Queue Remove/ Empty Media List handler
+
+extension QueueViewController {
+    func handleRemoveCurrentMediaIfNeeded(_ media: VLCMLMedia?, at index: IndexPath) {
+        guard mediaList.count > 1,
+              let currentMedia = playbackService.currentlyPlayingLibraryMedia,
+              let mlMedia = media,
+              mlMedia.identifier() == currentMedia.identifier() else {
+            performDeleteMediaFromQueue(at: index)
+            return
+        }
+
+        let repeatMode = playbackService.repeatMode
+
+        // avoiding UI Crash when removing the last index in the media list
+        if (repeatMode == .doNotRepeat || repeatMode == .repeatCurrentItem) &&
+            index.row == mediaList.count - 1 {
+            performDeleteMediaFromQueue(at: index, isLastMedia: true)
+        } else {
+            performDeleteMediaFromQueue(at: index)
+        }
+    }
+
+    func performDeleteMediaFromQueue(at index: IndexPath, isLastMedia: Bool = false) {
+        // handle removing last media
+        if isLastMedia {
+            // cases of doNotReapeat and repeatCurrentItem using the next() method causes wrong updates in the collection view which breaks the UI.
+            // playing the index - 1 is the solution for this case
+            self.mediaList.removeMedia(at: UInt(index.row))
+            playbackService.playItem(at: UInt(index.row - 1))
+        } else {
+            // removes the media form the media list and updates the currentIndex, then plays the next
+            playbackService.removeMediaFromMediaList(at: UInt(index.row))
+        }
+    }
+}

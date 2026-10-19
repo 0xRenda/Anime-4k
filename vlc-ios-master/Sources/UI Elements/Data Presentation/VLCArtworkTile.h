@@ -1,0 +1,49 @@
+/*****************************************************************************
+ * VLCArtworkTile.h
+ * VLC for iOS
+ *****************************************************************************
+ * Copyright (c) 2026 VideoLAN. All rights reserved.
+ * $Id$
+ *
+ * Authors: Felix Paul Kühne <fkuehne # videolan.org>
+ *
+ * Refer to the COPYING file of the official project for license.
+ *****************************************************************************/
+
+#import <UIKit/UIKit.h>
+
+@class VLCArtworkTile;
+
+NS_ASSUME_NONNULL_BEGIN
+
+typedef NS_ENUM(NSInteger, VLCArtworkTileBadge) {
+    VLCArtworkTileBadgeNone,
+    VLCArtworkTileBadgePlay,
+    VLCArtworkTileBadgeFolder,
+    VLCArtworkTileBadgeServer
+};
+
+@protocol VLCArtworkTileDelegate <NSObject>
+- (void)artworkTileDidRequestRemoval:(VLCArtworkTile *)tile;
+@optional
+- (nullable NSArray<UIMenuElement *> *)menuElementsForArtworkTile:(VLCArtworkTile *)tile;
+@end
+
+@interface VLCArtworkTile : UICollectionViewCell
+
+@property (class, readonly) NSString *reuseIdentifier;
+@property (nonatomic, weak, nullable) id<VLCArtworkTileDelegate> delegate;
+@property (nonatomic) CGFloat artworkCornerRadius;
+@property (nonatomic) VLCArtworkTileBadge badge;
+@property (nonatomic, nullable) UIImage *badgeImage;
+@property (nonatomic, copy, nullable) NSString *subtitle;
+@property (nonatomic, copy, nullable) NSString *pillText;
+@property (nonatomic, copy, nullable) NSString *accessoryGlyphName;
+@property (nonatomic, copy, nullable) NSString *removalActionTitle;
+@property (nonatomic, copy, nullable) NSString *removalActionGlyphName;
+
+- (void)configureWithName:(nullable NSString *)name artworkURL:(nullable NSURL *)artworkURL;
+
+@end
+
+NS_ASSUME_NONNULL_END

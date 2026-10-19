@@ -1,0 +1,956 @@
+"STORE_DESCRIPTION" = "VLC is a free and open source cross-platform multimedia player.\nIt can play all your movies, shows and music in most formats directly without conversion.\nIt allows file synchronization with Dropbox, GDrive, OneDrive, Box, iCloud Drive, iTunes, direct downloads and through Wi-Fi sharing as well as streaming from SMB, FTP, SFTP, NFS, UPnP/DLNA media servers and the web.\nVLC offers support for advanced subtitles including full SSA compatibility, multi-track audio, playback speed control and rendering through Chromecast.\n\nVLC is completely free and open source.";
+
+"STORE_DESCRIPTION_TV" = "VLC is a free and open source cross-platform multimedia player.\nIt can play all your movies, shows and music in most formats directly without conversion.\nIt allows Remote Playback from your Mac or PC via a Web UI as well as streaming from SMB, FTP, SFTP, NFS, UPnP/DLNA media servers and the web.\nVLC offers support for advanced subtitles including full SSA compatibility, multi-track audio, and playback speed control.\n\nVLC is completely free and open source.\n\nArtwork is provided by TMDb, which is a community maintained movie database.";
+
+"UNKNOWN_TRACK_TYPE" = "Unknown track type";
+"CHOOSE_TITLE" = "Choose Title";
+"CHOOSE_CHAPTER" = "Choose Chapter";
+"CHAPTER_SELECTION_TITLE" = "Chapters";
+"TITLE" = "Title";
+"CHAPTER" = "Chapter";
+"AUDIO" = "Audio";
+"SUBTITLES" = "Subtitles";
+"LANGUAGE" = "Language";
+"MEDIA_INFO" = "Media Information";
+"VIDEO_DIMENSIONS" = "Video dimensions";
+"FORMAT_VIDEO_DIMENSIONS" = "%ix%i pixels";
+"VIDEO_CODEC" = "Video Codec";
+"RESOLUTION_CLASS_8K" = "8K";
+"RESOLUTION_CLASS_4K" = "4K";
+"RESOLUTION_CLASS_HD" = "HD";
+"RESOLUTION_CLASS_SD" = "SD";
+"FORMAT_AUDIO_TRACKS" = "%i audio tracks";
+"ONE_AUDIO_TRACK" = "One audio track";
+"FORMAT_SPU_TRACKS" = "%i subtitles tracks";
+"ONE_SPU_TRACK" = "One subtitles track";
+"TRACKS" = "%i Tracks";
+"TRACK" = "%i Track";
+"TRACKS_DURATION" = "%u tracks, duration: %@";
+"NB_ALBUM_FORMAT" = "%i Album";
+"NB_ALBUMS_FORMAT" = "%i Albums";
+
+"PLAYING_EXTERNALLY_TITLE" = "TV Connected";
+"PLAYING_EXTERNALLY_DESC" = "This video is playing on the TV";
+"PLAYING_EXTERNALLY_ADDITION" = "\n Now playing on:"; /* \n should stay in every translation */
+
+"VFILTER_HUE" = "Hue";
+"VFILTER_CONTRAST" = "Contrast";
+"VFILTER_BRIGHTNESS" = "Brightness";
+"VFILTER_SATURATION" = "Saturation";
+"VFILTER_GAMMA" = "Gamma";
+
+"PREAMP" = "Preamp";
+"SNAP_BANDS" = "Snap bands";
+"EQUALIZER_SAVE_PROFILE" = "Save as Profile…";
+"EQUALIZER_APPLY_PROFILE" = "Apply";
+"EQUALIZER_MOVE_UP" = "Move Up";
+"EQUALIZER_MOVE_DOWN" = "Move Down";
+
+"PLAYBACK_FAILED" = "Playback failed";
+"PLEASE_WAIT" = "Please wait";
+"AR_CHANGED" = "Aspect Ratio: %@";
+"DEFAULT" = "Default";
+"FILL_TO_SCREEN" = "Crop to fill screen";
+"PLAYBACK_SPEED" = "Playback speed";
+"PLAYBACK_SPEED_FORMAT" = "%@×";
+"SPU_DELAY" = "Subtitles delay";
+"AUDIO_DELAY" = "Audio delay";
+"PLAYBACK_SPEED_THIS_VIDEO" = "This video";
+"PLAYBACK_SPEED_ALL_VIDEOS" = "All videos";
+"PLAYBACK_SPEED_THIS_TRACK" = "This track";
+"PLAYBACK_SPEED_ALL_TRACKS" = "All tracks";
+"DELAY_MS_FORMAT" = "%@ ms";
+"SYNC_VOICE_HEARD" = "Voice heard";
+"SYNC_TEXT_SEEN" = "Text seen";
+"SYNC_SOUND_HEARD" = "Sound heard";
+"SYNC_SCENE_SEEN" = "Scene seen";
+"SYNC_MARK_HINT" = "Double-tap at the moment it happens";
+"BUTTON_SLEEP_TIMER" = "Sleep Timer";
+"SLEEP_TIMER_STOP_AFTER_THIS_VIDEO" = "Stop After This Video";
+"SLEEP_TIMER_STOP_AFTER_THIS_TRACK" = "Stop After This Track";
+"CONTINUE_PLAYBACK" = "Continue playback?";
+"CONTINUE_PLAYBACK_LONG" = "Would you like to continue playback of \"%@\" where you left off?";
+
+"BUTTON_BACK" = "Back";
+"BUTTON_DONE" = "Done";
+"BUTTON_OPEN" = "Open";
+"BUTTON_PASTE_AND_OPEN" = "Paste and Open";
+"BUTTON_PASTE_AND_LOAD" = "Paste and Load";
+"BUTTON_CANCEL" = "Cancel";
+"BUTTON_CLOSE" = "Close";
+"BUTTON_SAVE" = "Save";
+"BUTTON_DOWNLOAD" = "Download";
+"BUTTON_DELETE" = "Delete";
+"BUTTON_RENAME" = "Rename";
+"BUTTON_COPY" = "Copy";
+"BUTTON_OK" = "OK";
+"BUTTON_DISMISS" = "Dismiss";
+"BUTTON_CONTACT" = "Contact us";
+"BUTTON_CONNECT" = "Connect";
+"BUTTON_LEARN_MORE" = "Learn More";
+"BUTTON_LOGOUT" = "Logout";
+"BUTTON_CONTINUE" = "Continue";
+"BUTTON_RESET" = "Reset";
+"BUTTON_RESCAN" = "Rescan";
+"BUTTON_SYNC" = "Sync";
+"PRIVATE_PLAYBACK_TOGGLE" = "Private Playback";
+
+"BUTTON_RENDERER" = "Casting devices";
+"BUTTON_RENDERER_HINT" = "Show a menu of available casting devices";
+"BUTTON_AIRPLAY" = "AirPlay or Bluetooth";
+"BUTTON_AIRPLAY_HINT" = "Show a menu of available AirPlay or Bluetooth devices";
+
+
+"FAVORITES" = "Favorites";
+"NO_FAVORITES" = "There are no Favorites yet";
+"NO_FAVORITES_DESCRIPTION" = "Mark your favorite folders while browsing servers to have them listed here.";
+"ADD_FAVORITE" = "Add to Favorites";
+"REMOVE_FAVORITE" = "Remove from Favorites";
+"FAVORITE_ALERT_TITLE" = "Would you like to add this folder to your Favorites?";
+"UNFAVORITE_ALERT_TITLE" = "Would you like to remove this folder from your Favorites?";
+
+"OPEN_NETWORK" = "Open Network Stream";
+"NETWORK_TITLE" = "Network Stream";
+"RECENT_STREAMS" = "Recent Streams";
+"REMOVE_FROM_RECENT_STREAMS" = "Remove from Recent Streams";
+"HTTP_UPLOAD_SERVER_OFF" = "Inactive Server";
+"HTTP_UPLOAD_NO_CONNECTIVITY" = "No active Wi-Fi connection";
+"OPEN_STREAM_OR_DOWNLOAD" = "Would you like to download or play this URL?";
+"ALWAYS_STREAM_URL" = "Always play URLs";
+"SHARED_VLC_IOS_LIBRARY" = "Shared VLC for iOS Library";
+"SMB_CIFS_FILE_SERVERS" = "File Servers (SMB)";
+"http://myserver.com/file.mkv" = "http://myserver.com/file.mkv";
+
+"MANAGED_SERVERS" = "Managed";
+
+"SMB_CIFS_FILE_SERVERS_SHORT" = "SMB";
+
+"HTTP_DOWNLOAD_CANCELLED" = "Download canceled by user";
+
+"NETWORK_AUTH_TITLE" = "Authentication Required";
+"NETWORK_AUTH_MESSAGE" = "%@ requires a user name and a password.";
+"NETWORK_AUTH_MESSAGE_REALM" = "%@ requires a user name and a password for “%@”.";
+"NETWORK_AUTH_WRONG_CREDENTIALS" = "The user name or the password was incorrect.";
+
+"TRANSFERS" = "Transfers";
+"TRANSFERS_IN_PROGRESS" = "In progress";
+"TRANSFER_FAILED" = "Transfer failed";
+"TRANSFERS_COUNT_FORMAT" = "%lu transfers";
+"DOWNLOADS_SECTION_COMPLETED" = "Completed";
+"DOWNLOAD_FILE_UNAVAILABLE" = "This file is no longer available. It may have been moved, renamed or deleted.";
+"ERROR_NUMBER" = "Error %i occured";
+"DOWNLOAD_FAILED" = "Download failed";
+"FILE_NOT_SUPPORTED" = "File format not supported";
+"FILE_NOT_SUPPORTED_LONG" = "The file format used by %@ is not supported by this version of VLC for iOS.";
+"SCHEME_NOT_SUPPORTED" = "Address scheme not supported";
+"SCHEME_NOT_SUPPORTED_LONG" = "The address scheme (%@) is not supported. Please use an address starting with HTTP, HTTPS or FTP.";
+"RENAME_MEDIA_TO" = "Enter new name for %@";
+"MEDIA_PLACEHOLDER" = "Media title";
+
+
+"SHARING_ACTION_SHEET_TITLE_CHOOSE_FILE" = "Choose a file to open:";
+"SHARING_ACTIVITY_OPEN_IN_TITLE" = "Open In...";
+"SHARING_ERROR_NO_FILES" = "Could not find any files to share";
+"SHARING_ERROR_NO_APPLICATIONS" = "Could not find any applications to open this type of file";
+"SHARING_SUCCESS_CAMERA_ROLL" = "File was successfully saved to the Camera Roll";
+
+"RADIO" = "Radio";
+"RADIOVC_DETAILTEXT" = "Listen to radio stations from around the world";
+"COUNTRIES" = "Countries";
+"ALL_COUNTRIES" = "All Countries";
+"SEE_ALL" = "See All";
+"LOAD_MORE" = "Load More";
+"STATION_COUNT" = "%lu stations";
+"RADIO_COUNTRIES_LOADING_FAILED" = "Couldn't load the list of countries. Please check your connection and try again.";
+"RADIO_STATIONS_LOADING_FAILED" = "Couldn't load the stations. Please check your connection and try again.";
+"RADIO_ALARM_SET" = "Set Alarm…";
+"RADIO_ALARM_EDIT" = "Edit Alarm…";
+"RADIO_ALARM_REMOVE" = "Remove Alarm";
+"RADIO_ALARM_LISTEN" = "Listen";
+"RADIO_ALARM_DENIED" = "VLC is not allowed to set alarms. You can grant access in the Settings app.";
+"RADIO_ALARM_FAILED" = "The alarm could not be set. Please try again.";
+"BUTTON_RETRY" = "Retry";
+"BITRATE_FORMAT" = "%li kb/s";
+"HEADER_TITLE_RENDERER" = "Select a casting device";
+
+"ONAIR" = "On Air";
+"ONAIR_ZERO_TITLE" = "Everything you follow, in one place";
+"ONAIR_ZERO_SUBTITLE" = "Start with any of the three. Your favorites stay on this device.";
+"ONAIR_CONTINUE" = "Continue";
+"ONAIR_CONTINUE_PAUSED" = "Paused %@";
+"ONAIR_ADD" = "Add";
+"ONAIR_FIND_STATION" = "Find a station";
+"ONAIR_PODCASTS" = "Podcasts";
+"ONAIR_PODCASTS_EMPTY_BODY" = "Paste an RSS feed, or browse the directory.";
+"ONAIR_PODCASTS_ZERO_BODY" = "Browse the directory, or bring your own feed.";
+"ONAIR_PASTE_RSS" = "Paste RSS";
+"ONAIR_TV" = "TV";
+"ONAIR_TV_EMPTY_BODY" = "Public channels, or your own M3U.";
+"ONAIR_OPEN_DIRECTORY" = "Open directory";
+"ONAIR_ADD_M3U" = "Add M3U";
+
+"BROWSE" = "Browse";
+"BROWSE_SECTION_OPEN" = "Open…";
+"BROWSE_PHOTOS" = "Photos";
+"BROWSE_CLOUD" = "Cloud";
+"BROWSE_NETWORK_STREAM" = "Network stream";
+"BROWSE_WIFI_SHARING" = "Wi-Fi sharing";
+"BROWSE_ADD_SERVER" = "Add server";
+"LOCAL_NETWORK" = "Local Network";
+"CONNECT_TO_SERVER" = "Connect to Server";
+"USER_LABEL" = "User";
+"PASSWORD_LABEL" = "Password";
+"DISABLE_LABEL" = "Disable";
+"BUTTON_ANONYMOUS_LOGIN" = "Anonymous Login";
+
+"LOCAL_SERVER_REFRESH" = "Refresh";
+"LOCAL_SERVER_LAST_UPDATE" = "Last Updated on %@";
+"LOCAL_SERVER_CONNECTION_FAILED_TITLE" = "Connection to server failed";
+"LOCAL_SERVER_CONNECTION_FAILED_MESSAGE" = "Please check your server address and credentials";
+
+"FILES_APP_CELL_TITLE" = "Local files";
+
+"PHOTO_LIBRARY_IMPORT_FAILED" = "Import failed";
+"PHOTO_LIBRARY_IMPORT_FAILED_MESSAGE" = "VLC could not import %d of the selected videos from your photo library.";
+
+"CLOUD_SERVICES" = "Cloud Services";
+"LOGIN" = "Login";
+"LOGGED_IN" = "Logged in";
+
+"DROPBOX_DOWNLOAD" = "Download file?";
+"DROPBOX_DL_LONG" = "Would you like to download \"%@\" to your %@?";
+"DROPBOX_LOGIN" = "Login";
+
+"GDRIVE_ERROR_FETCHING_FILES" = "Error while fetching files";
+"GDRIVE_DOWNLOAD_SUCCESSFUL" = "Your file has been successfully downloaded";
+"GDRIVE_DOWNLOAD_SUCCESSFUL_TITLE" = "SUCCESS";
+"GDRIVE_ERROR_DOWNLOADING_FILE" = "An error occured while downloading";
+"GDRIVE_ERROR_DOWNLOADING_FILE_TITLE" = "ERROR";
+"GDRIVE_MY_DRIVE" = "My Drive";
+"GDRIVE_SHARED_WITH_ME" = "Shared with me";
+
+"ONEDRIVE_MEDIA_WITHOUT_URL" = "The selected Media doesn't have a playable url";
+
+"DISK_FULL" = "Storage limit reached";
+"DISK_FULL_FORMAT" = "%@ cannot be stored on your %@, because you don't have enough free space left.";
+
+"NUM_OF_FILES" = "%i files";
+"ONE_FILE" = "1 file";
+"NO_FILES" = "No supported files";
+"DOWNLOADING" = "Downloading...";
+"REMAINING_TIME" = "Remaining time: %@";
+"BIOMETRIC_UNLOCK" = "Unlock Media Library\nCancel to enter Passcode";
+
+// Passcode Strings that we need to localize for them
+"Set Passcode" = "Set Passcode";
+"Enter Passcode" = "Enter Passcode";
+"Enter a passcode" = "Enter a passcode";
+"Enter your passcode" = "Enter your passcode";
+"Passcodes did not match. Try again." = "Passcodes did not match. Try again.";
+"Re-enter your passcode" = "Re-enter your passcode";
+"Passcode Options" = "Passcode Options";
+"4-Digit Numeric Code" = "4-Digit Numeric Code"; /* Passcode 4 digit numeric code */
+"6-Digit Numeric Code" = "6-Digit Numeric Code"; /* Passcode 6 digit numeric code */
+
+"Settings" = "Settings"; // plain text key to keep compatibility with InAppSettingsKit's upstream
+"ON" = "On";
+"OFF" = "Off";
+
+"EMPTY_LIBRARY" = "Empty Media Library";
+"EMPTY_LIBRARY_LONG" = "For playback, you can stream media from a server on your local network, from the cloud or synchronize media to your device using the \"Files\" tab in Finder or iTunes, Wi-Fi Upload or cloud services.";
+
+"EMPTY_NO_PLAYLISTS" = "Playlists";
+"EMPTY_NO_PLAYLISTS_DESCRIPTION" = "To create playlists, enter Edit mode in the Video or Audio content tabs and select your favorite media.\nYou can also synchronize existing playlists from your other devices or the internet.";
+
+"EMPTY_PLAYLIST" = "Empty Playlist";
+"EMPTY_PLAYLIST_DESCRIPTION" = "Add media while editing in the respective categories.";
+
+"EMPTY_HISTORY" = "Empty History";
+"EMPTY_HISTORY_DESCRIPTION" = "No media yet.";
+
+"EMPTY_MEDIA_LIST" = "Empty Media List";
+"EMPTY_MEDIA_LIST_DESCRIPTION" = "The media list is empty therefore the playback could not start";
+
+"PLAYBACK_SCRUB_HELP" = "Slide your finger up to adjust the scrubbing rate.";
+"PLAYBACK_SCRUB_HIGH" = "High-Speed Scrubbing";
+"PLAYBACK_SCRUB_HALF" = "Half-Speed Scrubbing";
+"PLAYBACK_SCRUB_QUARTER" = "Quarter-Speed Scrubbing";
+"PLAYBACK_SCRUB_FINE" = "Fine Scrubbing";
+"PLAYBACK_SCRUB_TOTAL_TIME_FORMAT" = "%@ elapsed, total duration %@"; /* 1: elapsed time, 2: total time */
+"PLAYBACK_SCRUB_REMAINING_TIME_FORMAT" = "%@ elapsed, %@"; /* 1: elapsed time, 2: remaining time */
+"PLAYBACK_SCRUB_ACCESSIBILITY_TIME_DISPLAY" = "Time Display";
+"PLAYBACK_POSITION" = "Playback Position";
+"PLAYBACK_LIVE_STREAM" = "LIVE";
+"VIDEO_FILTER" = "Video Filters";
+"VIDEO_FILTER_RESET_BUTTON" = "Reset Video Filters";
+"VIDEO_ASPECT_RATIO_BUTTON" = "Video aspect ratio";
+"BWD_BUTTON" = "Jump Backwards";
+"FWD_BUTTON" = "Jump Forwards";
+"PLAY_BUTTON" = "Play";
+"NEXT_BUTTON" = "Next";
+"PREV_BUTTON" = "Previous";
+"PLAY_ALL_BUTTON" = "Play all";
+"PLAY_ALL_HINT" = "Play all the medias in the collection";
+
+"RESET_VIDEO_FILTERS" = "Do you want to reset the video filters?";
+"RESET_PLAYBACK_SPEED" = "Do you want to reset the playback speed?";
+"RESET_EQUALIZER" = "Do you want to reset the equalizer's settings?";
+"RESET_SLEEP_TIMER" = "Do you want to reset the sleep timer?";
+
+"CUSTOM_EQUALIZER_PROFILES" = "Custom profiles";
+"DEFAULT_PROFILE_NAME" = "Custom profile";
+"CUSTOM_EQUALIZER_ALERT_TITLE" = "Save new profile";
+"CUSTOM_EQUALIZER_ALERT_MESSAGE" = "Do you want to save a new profile with the selected values?";
+"CUSTOM_EQUALIZER_PROFILE_PLACEHOLDER" = "Profile title";
+"RENAME_CUSTOM_PROFILE_TITLE" = "Rename the profile";
+"DELETE_CUSTOM_PROFILE_TITLE" = "Delete the profile";
+"DELETE_CUSTOM_PROFILE_MESSAGE" = "Do you want to delete the selected profile?";
+
+"VERSION_FORMAT" = "Version: %@";
+"BASED_ON_FORMAT" = "Based on:<br />%@";
+
+"NEW" = "NEW";
+
+"VO_VIDEOPLAYER_TITLE" = "Video Player";
+"VO_VIDEOPLAYER_DOUBLETAP" = "Double tap to show or hide playback controls";
+
+"FIRST_STEPS_ITUNES" = "File Sync";
+"FIRST_STEPS_ITUNES_TITLE" = "Sync With Your Computer";
+"FIRST_STEPS_ITUNES_DETAILS" = "Connect your %@ to use the Finder or iTunes. In the Finder, select the \"Files\" tab and choose VLC to transfer files.";
+"FIRST_STEPS_WIFI_TITLE" = "Share via Wi-Fi";
+"FIRST_STEPS_WIFI_DETAILS" = "Enter the generated URL in your favorite web browser while connected to the same network as your %@.";
+"FIRST_STEPS_CLOUDS" = "Clouds";
+"FIRST_STEPS_CLOUD_TITLE" = "Cloud";
+"FIRST_STEPS_CLOUD_DETAILS" = "Upload your media to a cloud service like Google Drive or Dropbox to remotely download or stream them.";
+
+"PLEX_CHECK_ACCOUNT" = "Check your Plex account in settings";
+"PLEX_ERROR_ACCOUNT" = "Plex login Error";
+
+"UNAUTHORIZED" = "Unauthorized";
+
+"SERVER" = "Server";
+"SERVER_PORT" = "Port";
+"ENTER_SERVER_ADDRESS" = "Enter server address";
+"NO_SERVER_FOUND" = "No server found";
+"NO_RECENT_STREAMS" = "No stream was played recently";
+
+"WEBINTF_TITLE" = "Sharing via Wi-Fi";
+"WEBINTF_ETHERNET" = "Sharing via Ethernet";
+"WEBINTF_DROPFILES" = "Drop Files";
+"WEBINTF_DROPFILES_LONG" = "Drop files in the window to add them to your %@.<br>Or click on the \"+\" button to use the file picker dialog.";
+"WEBINTF_DOWNLOADFILES" = "Download Files";
+"WEBINTF_DOWNLOADFILES_LONG" = "Just click the file you want to download from your %@.";
+"WEBINTF_DOWNLOAD_ALL" = "Download All";
+"WEBINTF_DOWNLOAD_SELECTED" = "Download Selected (%@)";
+"WEBINTF_ADDRESS_COPIED" = "Address copied to clipboard";
+"WEBINTF_TITLE_ATV" = "Remote Playback";
+"WEBINTF_URL_SENT" = "URL sent successfully.";
+"WEBINTF_URL_EMPTY" = "URL cannot be empty.";
+"WEBINTF_URL_INVALID" = "Not a valid URL.";
+"WEBINTF_AUTH_REQUIRED" = "Please enter the passcode you set in VLC iOS:";
+"WEBINTF_AUTH_WRONG_PASSCODE" = "Wrong passcode.<br>Remaining attempts: ";
+"WEBINTF_AUTH_BANNED" = "You entered too many wrong passcodes.<br>Please restart VLC iOS and try again.";
+
+"DURATION" = "Duration";
+"TITLE" = "Title";
+"ROTATE_BUTTON" = "Rotate"; /* Accessibility label for rotate button on the player */
+"ROTATE_BUTTON_HINT" = "Toggles the video player between landscape and portrait mode."; /* Accessibility hint for rotate button on the player */
+
+"ENTER_URL" = "Enter URL to play";
+"HTTP_SERVER_ON" = "Disable Remote Playback";
+"HTTP_SERVER_OFF" = "Enable Remote Playback";
+"HTTP_UPLOAD_QR_CODE" = "QR code for the server address";
+"CACHED_MEDIA" = "Cached Media";
+"CACHED_MEDIA_LONG" = "Media shown here is stored locally on your Apple TV. Note that contents can be removed by the operating system without prior notice anytime when VLC is not running in case your device runs out of storage.";
+"DOWNLOAD_SUBS_FROM_OSO" = "Download Subtitles...";
+"FOUND_SUBS" = "Found subtitles";
+"NO_SUB_FOUND_OSO" = "No subtitles were found for your media item \"%@\".";
+"LOAD_EXTERNAL" = "Load External";
+
+"REPEAT_MODE" = "Repeat";
+"SHUFFLE" = "Shuffle";
+"SHUFFLE_DISABLED" = "Shuffle off";
+
+"NETWORK_STREAM_PLACEHOLDER" = "Stream title";
+"NETWORK_STREAM_URL_PLACEHOLDER" = "Stream address";
+"RESET_NETWORK_STREAM_LIST_TITLE" = "Reset list";
+"RESET_NETWORK_STREAM_LIST_TEXT" = "Permanently reset the list of recently played network streams.";
+
+// MARK: - Local Network Service Names
+"UPNP_LONG" = "Universal Plug'n'Play (UPnP)";
+"UPNP_SHORT" = "UPnP";
+
+"PLEX_LONG" = "Plex Media Server (via Bonjour)";
+"PLEX_SHORT" = "Plex";
+
+"FTP_SHORT" = "FTP";
+"SFTP_SHORT" = "SFTP";
+"WEBDAV_SHORT" = "WebDAV";
+
+"NFS_LONG" = "Network File System (NFS)";
+"NFS_SHORT" = "NFS";
+"SHARED_VLC_IOS_LIBRARY_SHORT" = "VLC";
+
+"BONJOUR_FILE_SERVERS" = "BONJOUR File Server";
+"DSM_WORKGROUP" = "Workgroup";
+
+"URL_NOT_SUPPORTED" = "The URL can't be opened";
+
+// Insert %@ where play-pause-glyph should be placed
+"DELETE_ITEM_HINT" = "Press %@ to Delete"; /* Insert %@ where play-pause-glyph should be placed */
+"DELETE_MESSAGE" = "Confirm the deletion of the selection";
+"DELETE_MESSAGE_PLAYLIST" = "Are you sure to delete the selected playlist?\nAssociated media files won't be deleted.";
+"DELETE_MESSAGE_PLAYLISTS" = "Are you sure to delete the selected playlists?\nAssociated media files won't be deleted.";
+"DELETE_MESSAGE_PLAYLIST_CONTENT" = "Are you sure to remove the selected media from the playlist?\nThey won't be deleted from the disk.";
+"DELETE_MESSAGE_FOLDER" = "Are you sure to delete the selection?\nEvery media file inside the selected folders will be deleted from the disk, too.";
+"DELETE_MESSAGE_EXTERNAL_FOLDER" = "Are you sure to delete the selection?\nThe selected folders and everything inside them will be deleted from the disk. Drives are only removed from the library.";
+"DELETE_MESSAGE_HISTORY" = "Are you sure to remove the selected media from the history?\nThey won't be deleted from the disk, but their playback progress will be lost.";
+
+// MARK: - Drag and Drop
+
+"PROTOCOL_NOT_SELECTED" = "Protocol not selected";
+"Settings" = "Settings";
+"SETTINGS_ABOUT" = "About VLC";
+"SETTINGS_DOCUMENTATION" = "Documentation";
+"SETTINGS_DONATE" = "Donate to VideoLAN";
+"SETTINGS_DONATE_LONG" = "Support free and open source multimedia";
+
+"ERROR" = "Error";
+"SORT" = "Sort";
+"SORT_BY" = "Sort by";
+"SORT_NOTIFICATION" = "Using the same option in a row reverses the sorting order";
+/* Noun, not verb: the label of a search field or search button (French: "Recherche", not "Rechercher") */
+"SEARCH" = "Search";
+"VIDEO" = "Video";
+
+// MARK: - MediaViewController Swipable Header
+"ALBUMS" = "Albums";
+"ARTISTS" = "Artists";
+"EPISODES" = "Episodes";
+"GENRES" = "Genres";
+"ALL_VIDEOS" = "All videos";
+"SONGS" = "Songs";
+"PLAYLISTS" = "Playlists";
+"PLAYLIST" = "Playlist";
+"FOLDERS" = "Folders";
+
+// MARK: - Podcasts
+"PODCAST_CONTINUE_LISTENING" = "Continue Listening";
+"PODCAST_LATEST_EPISODES" = "Latest Episodes";
+"PODCAST_SHOWS" = "Shows";
+"PODCAST_SORT_EPISODES_HINT" = "Sort the episodes in this show";
+"PODCAST_MARK_ALL_AS_PLAYED" = "Mark All as Played";
+"PODCAST_TIME_LEFT" = "%@ left";
+"PODCAST_EXPORT_MEDIA_FILE" = "Export Media File";
+"PODCAST_EPISODE_COUNT" = "%d episodes";
+"PODCAST_EPISODE_DOWNLOAD" = "Download episode";
+"PODCAST_EPISODE_DOWNLOADED" = "Episode downloaded";
+"PODCAST_EPISODE_CANCEL_DOWNLOAD" = "Cancel download";
+"PODCAST_DELETE_DOWNLOAD_TITLE" = "Remove Download";
+"PODCAST_DELETE_DOWNLOAD_MESSAGE" = "This will delete the downloaded copy of this episode. You can download it again later.";
+"PODCAST_UNSUBSCRIBE" = "Unsubscribe";
+"PODCAST_UNSUBSCRIBE_MESSAGE" = "This will remove this show, its episodes and any downloaded copies from your library.";
+"PODCAST_OPEN_WEBSITE" = "Open Website…";
+"PODCAST_DOWNLOAD_NEW_EPISODES" = "Download New Episodes";
+"PODCAST_DOWNLOADS_DISABLED" = "Disabled";
+"PODCAST_EMPTY_TITLE" = "No Podcasts Yet";
+"PODCAST_EMPTY_DESCRIPTION" = "Browse the directory or add a show via its RSS feed URL to start listening.";
+"PODCAST_ADD_VIA_RSS" = "Add via RSS URL";
+"PODCAST_SUBSCRIBE" = "Subscribe";
+"PODCAST_ADD_RSS_PLACEHOLDER" = "https://example.com/feed.xml";
+"PODCAST_ADD_RSS_ERROR" = "Couldn't add this podcast. Check the URL and try again.";
+"PODCAST_ADD_RSS_ERROR_EMPTY" = "Enter a podcast feed URL.";
+"PODCAST_ADD_RSS_ERROR_INVALID_URL" = "That doesn't look like a valid URL.";
+"PODCAST_ADD_RSS_ERROR_SCHEME" = "Only http:// and https:// feed URLs are supported.";
+"PODCAST_ADD_RSS_ERROR_NETWORK" = "Couldn't reach that address. Check your internet connection and the URL.";
+"PODCAST_ADD_RSS_ERROR_HTTP" = "That address returned an error (%d). Double-check the feed URL.";
+"PODCAST_ADD_RSS_ERROR_NOT_A_FEED" = "That URL doesn't look like a podcast feed. Make sure it points directly to the RSS/XML feed, not the podcast's webpage.";
+"PODCAST_SUBSCRIBE_FEEDS_MESSAGE" = "This file contains %d podcast feeds.";
+"PODCAST_SUBSCRIBE_PARTIAL" = "%d of %d feeds could not be added.";
+"PODCAST_DIRECTORY_TITLE" = "Browse";
+"PODCAST_DIRECTORY_BROWSE" = "Browse the directory";
+"PODCAST_DIRECTORY_TOP_CHARTS" = "Top Charts";
+"PODCAST_DIRECTORY_NEW" = "New & Noteworthy";
+"PODCAST_DIRECTORY_LANGUAGE" = "Language";
+"PODCAST_DIRECTORY_SEARCH_PLACEHOLDER" = "Search podcasts";
+"PODCAST_DIRECTORY_NO_RESULTS" = "No podcasts found.";
+"PODCAST_DIRECTORY_SUBSCRIBED" = "Subscribed";
+"PODCAST_DIRECTORY_UPDATED" = "Updated %@";
+"PODCAST_DIRECTORY_EXPLICIT" = "Explicit";
+"PODCAST_DIRECTORY_ERROR" = "Couldn't reach the podcast directory. Check your connection and try again.";
+
+"PODCAST_CATEGORY_ARTS" = "Arts";
+"PODCAST_CATEGORY_BUSINESS" = "Business";
+"PODCAST_CATEGORY_COMEDY" = "Comedy";
+"PODCAST_CATEGORY_EDUCATION" = "Education";
+"PODCAST_CATEGORY_FICTION" = "Fiction";
+"PODCAST_CATEGORY_GOVERNMENT" = "Government";
+"PODCAST_CATEGORY_HEALTH_FITNESS" = "Health & Fitness";
+"PODCAST_CATEGORY_HISTORY" = "History";
+"PODCAST_CATEGORY_KIDS_FAMILY" = "Kids & Family";
+"PODCAST_CATEGORY_LEISURE" = "Leisure";
+"PODCAST_CATEGORY_MUSIC" = "Music";
+"PODCAST_CATEGORY_NEWS" = "News";
+"PODCAST_CATEGORY_RELIGION_SPIRITUALITY" = "Religion & Spirituality";
+"PODCAST_CATEGORY_SCIENCE" = "Science";
+"PODCAST_CATEGORY_SOCIETY_CULTURE" = "Society & Culture";
+"PODCAST_CATEGORY_SPORTS" = "Sports";
+"PODCAST_CATEGORY_TECHNOLOGY" = "Technology";
+"PODCAST_CATEGORY_TRUE_CRIME" = "True Crime";
+"PODCAST_CATEGORY_TV_FILM" = "TV & Film";
+"VIDEO_GROUPS" = "Video groups";
+"HISTORY" = "History";
+"MEDIA_LIBRARY_LABEL" = "Library";
+"MODIFIED_DATE" = "Modified date";
+"NAME" = "Name";
+
+// MARK: - EDIT
+
+"BUTTON_MENU" = "Menu";
+"BUTTON_MENU_HINT" = "Select, reorder and sort the media items present in this view";
+
+"BUTTON_EDIT" = "Edit";
+
+"BUTTON_SELECT" = "Select";
+"BUTTON_SELECT_HINT" = "Select button";
+
+"BUTTON_SELECT_ALL" = "Select all";
+"BUTTON_SELECT_ALL_HINT" = "Select all the media items present in this view";
+
+"BUTTON_HISTORY" = "History";
+"BUTTON_HISTORY_HINT" = "View your recently played media";
+
+"BUTTON_CLEAR" = "Clear";
+"CLEAR_HISTORY_TITLE" = "Clear History";
+"CLEAR_HISTORY_MESSAGE" = "Confirm clearing history";
+
+"ADD_TO_PLAYLIST" = "Add to Playlist";
+"ADD_TO_PLAYLIST_HINT" = "Open the add to playlist menu";
+
+"PLAY_AS_AUDIO" = "Play as audio";
+"PLAY_AS_AUDIO_HINT" = "Play the video file as an audio file.";
+
+"MARK_AS_PLAYED" = "Mark as Played";
+"MARK_AS_PLAYED_HINT" = "Mark the media as played";
+"MARK_AS_UNPLAYED" = "Mark as Unplayed";
+"MARK_AS_UNPLAYED_HINT" = "Mark the media as unplayed";
+
+"PLAYLIST_PLACEHOLDER" = "Playlist title";
+"PLAYLIST_DESCRIPTION" = "Choose a title for your new playlist";
+"PLAYLIST_CREATION" = "Create a new playlist";
+"PLAYLIST_CREATION_HINT" = "Show an interactive action to create a playlist";
+"ERROR_PLAYLIST_CREATION" = "Failed to create a playlist";
+"ERROR_PLAYLIST_TRACKS" = "Failed to retrieve tracks";
+
+"ERROR_RENAME_FAILED" = "Renaming failed";
+"ERROR_EMPTY_NAME" = "The title can't be empty";
+
+"SHARE_LABEL" = "Share";
+"SHARE_HINT" = "Share selected files";
+"RENAME_HINT" = "Rename selected files";
+"DELETE_HINT" = "Delete selected files";
+
+"ADDITIONAL_OPTIONS" = "Additional options";
+
+// MARK: - Sort
+
+"GRID_LAYOUT" = "Grid";
+"LIST_LAYOUT" = "List";
+"HIDE_FEAT_ARTISTS" = "Hide feat. artists";
+"HIDE_TRACK_NUMBERS" = "Hide track numbers";
+
+// MARK: - VLCMediaLibraryKit - Sorting Criteria
+
+"ALPHA" = "Alphanumerically";
+"DURATION" = "Duration";
+"INSERTION_DATE" = "Insertion date";
+"LAST_MODIFICATION_DATE" = "Last modification date";
+"RELEASE_DATE" = "Release date";
+"FILE_SIZE" = "File size";
+"ARTIST" = "Artist";
+"PLAY_COUNT" = "Play count";
+"ALBUM" = "Album";
+"FILENAME" = "Filename";
+"TRACK_NUMBER" = "Track number";
+"NB_AUDIO" = "Number of audio";
+"NB_MEDIA" = "Number of media";
+"NB_VIDEO" = "Number of video";
+"NB_ALBUM" = "Number of albums";
+"LAST_PLAYBACK_DATE" = "Last playback date";
+"TRACK_ID" = "Track ID";
+"CUSTOM" = "Custom";
+"TRACK_NB_RELEASE_YEAR" = "Track Number, Albums by release date";
+
+// MARK: - VLCNetworkLoginTVViewController
+
+"NO_SAVING_DATA" = "Nothing found";
+
+// MARK: - MediaCollectionViewCell
+
+"UNKNOWN_ARTIST" = "Unknown Artist";
+"VARIOUS_ARTIST" = "Various Artists";
+"UNKNOWN_ALBUM" = "Unknown Album";
+"SINGLE_ITEM_SELECTED" = "item selected";
+"MULTIPLE_ITEMS_SELECTED" = "items selected";
+
+// MARK: - VideoPlayerControls
+
+"SECONDARY_SUBTITLE" = "Secondary Subtitle...";
+"SUBTITLE_AND_TRACK_BUTTON" = "Subtitles and audio tracks";
+"SUBTITLE_AND_TRACK_HINT" = "Choose subtitle or audio tracks";
+
+"DVD_BUTTON" = "DVD";
+"DVD_HINT" = "DVD interface";
+
+"ROTATION_LOCK_BUTTON" = "Rotation lock";
+"ROTATION_LOCK_HINT" = "Lock video to current orientation";
+
+"REPEAT_HINT" = "Repeat same media";
+"DO_NOT_REPEAT_HINT" = "Do not repeat media list";
+"REPEAT_ALL_HINT" = "Repeat media list";
+
+"BACKWARD_BUTTON" = "Backward";
+"BACKWARD_HINT" = "Jump Backwards";
+
+"PREVIOUS_BUTTON" = "Previous";
+"PREVIOUS_HINT" = "Previous media";
+
+"PLAY_PAUSE_BUTTON" = "Play or pause";
+"PLAY_PAUSE_HINT" = "Play or Pause current playback";
+
+"STOP_BUTTON" = "Stop";
+"CLOSE_HINT" = "Stop the playback";
+
+"MINIMIZE_BUTTON" = "Minimize";
+"MINIMIZE_HINT" = "Minimize the player";
+
+"NEXT_HINT" = "Next media";
+
+"FORWARD_BUTTON" = "Forward";
+"FORWARD_HINT" = "Jump forwards";
+
+"INTERFACE_LOCK_BUTTON" = "Lock interface";
+
+"BRIGHTNESS_HINT" = "Vertical brightness control";
+"BRIGHTNESS_SLIDER" = "Slide vertically to change the brightness level";
+"VOLUME_HINT" = "Vertical volume control";
+"VOLUME_SLIDER" = "Slide vertically to change the volume level";
+
+"SELECT_A_MARK" = "Select the A mark";
+"SELECT_A_MARK_HINT" = "Select the A mark of the AB loop";
+"SELECT_B_MARK" = "Select the B mark";
+"SELECT_B_MARK_HINT" = "Select the B mark of the AB loop";
+
+"AB_LOOP" = "A→B Loop";
+"AB_LOOP_MARKS" = "A→B Loop Marks";
+
+"RESET_AB_LOOP" = "Do you want to remove the A→B loop?";
+"RESET_AB_LOOP_MARKS" = "Do you want to reset the A→B loop marks?";
+
+"SHUFFLE_HINT" = "Shuffle media list";
+"SHUFFLE_OFF_HINT" = "Do not shuffle media list";
+
+"ASPECT_RATIO_TITLE" = "Aspect Ratios";
+"VIDEO_ASPECT_RATIO_BUTTON" = "Video aspect ratio";
+"VIDEO_ASPECT_RATIO_HINT" = "Change the aspect ratio of the current video";
+
+"MORE_OPTIONS_BUTTON" = "More";
+"MORE_OPTIONS_HINT" = "View more option controls";
+
+"PLAYBACK_CONTROLS_BAR_TITLE" = "Playback controls";
+"PLAYBACK_CONTROLS_BAR_HINT" = "Pause, seek, next chapter";
+
+"PLAYER_WARNING_SUBTITLE_CAST_TITLE" = "Subtitles unsupported";
+"PLAYER_WARNING_SUBTITLE_CAST_DESCRIPTION" = "Subtitles are not yet supported while casting.";
+
+// MARK: - MediaMoreOptionsActionSheet
+"EQUALIZER_CELL_TITLE" = "Equalizer";
+"MORE_OPTIONS_HEADER_TITLE" = "Video Options";
+"MORE_OPTIONS_HEADER_AUDIO_TITLE" = "Audio Options";
+"BOOKMARKS_TITLE" = "Bookmarks";
+"ADD_BOOKMARKS_TITLE" = "Add Bookmarks";
+"BOOKMARK_DEFAULT_NAME" = "Bookmark at";
+"BOOKMARK_PLACEHOLDER" = "Bookmark title";
+"BOOKMARK_RENAME_TITLE" = "Rename bookmark";
+"BOOKMARK_DELETE_TITLE" = "Delete bookmark";
+"BOOKMARK_DELETE_MESSAGE" = "Confirm the deletion of the bookmark";
+"INCREASE_BUTTON" = "Increase button";
+"DECREASE_BUTTON" = "Decrease button";
+"VIDEO_FILTERS_HINT" = "Select to open the video filters view";
+"PLAYBACK_SPEED_HINT" = "Select to open the playback speed view";
+"SLEEP_TIMER_HINT" = "Select to open the sleep timer view";
+"EQUALIZER_HINT" = "Select to open the equalizer view";
+"CHAPTERS_HINT" = "Select to open the chapters view";
+"BOOKMARKS_HINT" = "Select to open the bookmarks view";
+"INTERFACE_LOCK_HINT" = "Enable the option to lock the user interface";
+"SNAPSHOT_SAVED" = "Snapshot Saved";
+"SNAPSHOT_SAVED_TO_CAMERA_ROLL" = "Snapshot saved to Camera Roll";
+"SNAPSHOT_FAILED" = "Snapshot Failed";
+"SNAPSHOT_FAILED_MESSAGE" = "Unable to save snapshot. Please ensure photo library access is granted.";
+
+// MARK: - Settings
+"FORCE_RESCAN_TITLE" = "Force media library rescan";
+"FORCE_RESCAN_MESSAGE" = "Do you want to force VLC to rescan your media library?\nIt could take some time.";
+
+"FEEDBACK_EMAIL_TITLE" = "Feedback about VLC on iOS and iPadOS";
+"FEEDBACK_EMAIL_NOT_POSSIBLE_TITLE" = "Mail account not configured";
+"FEEDBACK_EMAIL_NOT_POSSIBLE_LONG" = "Contact us through %@ from another device.";
+
+
+"SETTINGS_RESET_TITLE" = "Reset the settings";
+"SETTINGS_RESET_MESSAGE" = "Do you want to reset all the settings to their default values?";
+
+"SETTINGS_PLAY_ALL" = "Seamless playback for collections";
+"SETTINGS_PLAY_ALL_HINT" = "Enable to automatically play the next media in the audio or video tabs";
+"SETTINGS_PLAYLIST_PLAY_ALL" = "Seamless playback for playlists";
+"SETTINGS_PLAYLIST_PLAY_ALL_HINT" = "Enable to automatically play the next media in a playlist";
+
+"SETTINGS_SYNC_MEDIA_LIBRARY_TITLE" = "Sync media library to Apple Watch";
+"SETTINGS_SYNC_MEDIA_LIBRARY_MESSAGE" = "This sends a snapshot of the iPhone's current media library (%@) to the Apple Watch for display. It does not download the individual audio files themselves.";
+
+// MARK: - Local Network
+
+"SMBV1_WARN_TITLE" = "SMBv1 Connection Warning";
+"SMBV1_WARN_DESCRIPTION" = "We detected an old protocol (SMBv1).\nAre you really sure to continue with SMBv1?\nWe advise upgrading or changing your server settings.";
+"SMBV1_CONTINUE" = "Continue with SMBv1";
+"SMBV1_NEXT_PROTOCOL" = "Try SMBv2/v3";
+
+// MARK: - Preview labels
+
+"ENCODING" = "Encoding";
+
+// MARK: - Media groups
+
+"ADD_TO_MEDIA_GROUP" = "Add to media group";
+"ADD_TO_MEDIA_GROUP_HINT" = "Open the add to media group menu";
+
+"MEDIA_GROUPS" = "Media groups";
+"MEDIA_GROUPS_DESCRIPTION" = "Choose a title for your new media group";
+"MEDIA_GROUPS_PLACEHOLDER" = "Media group title";
+
+"REMOVE_FROM_MEDIA_GROUP" = "Remove from media group";
+"REMOVE_FROM_MEDIA_GROUP_HINT" = "Remove selection from the media group";
+
+"MEDIA_GROUP_CREATION" = "New media group";
+"MEDIA_GROUP_CREATION_HINT" = "Show alert to create a playlist";
+"MEDIA_GROUP_MOVE_TO_ROOT" = "Move content to top level";
+"MEDIA_GROUP_MOVE_TO_ROOT_HINT" = "Moves the content of the selection to the top level";
+
+"BUTTON_REGROUP" = "Regroup";
+"BUTTON_REGROUP_TITLE" = "Regroup selection";
+"BUTTON_REGROUP_HINT" = "Attempt to regroup automatically single media.";
+"BUTTON_REGROUP_DESCRIPTION" = "Are you sure to attempt to regroup automatically single media?\nThis can take some time.";
+
+// MARK: - Files.app persistence file
+"MEDIALIBRARY_FILES_PLACEHOLDER" = "Place media here to add them";
+"MEDIALIBRARY_ADDING_PLACEHOLDER" = "Adding...";
+
+// MARK: - QueueViewController
+
+"PLAY_HINT" = "Play";
+"PLAY_LABEL" = "Play";
+"PLAY_NEXT_IN_QUEUE_HINT" = "Play next in queue";
+"PLAY_NEXT_IN_QUEUE_LABEL" = "Play next in queue";
+"APPEND_TO_QUEUE_HINT" = "Append to queue";
+"APPEND_TO_QUEUE_LABEL" = "Append to queue";
+"ENQUEUE_LABEL" = "Enqueue";
+"QUEUE_LABEL" = "Queue";
+
+"DISPLAY_AS" = "Display as";
+
+// MARK: - AudioMiniPlayer playback controls menu
+"MENU_PLAYBACK_CONTROLS" = "Playback controls";
+"MENU_REPEAT_DISABLED" = "Do not repeat";
+"MENU_REPEAT_SINGLE" = "Repeat one";
+"MENU_REPEAT_ALL" = "Repeat all";
+
+// MARK: - ActionSheet
+
+"ACTIONSHEET_BACKGROUND_LABEL" = "Action sheet background";
+"ACTIONSHEET_BACKGROUND_HINT" = "Tap to remove the action sheet.";
+
+// MARK: - Donation
+"DONATION_CUSTOM_AMOUNT" = "Enter Custom Amount";
+"DONATION_TITLE" = "Privacy over profit";
+"DONATION_DESCRIPTION" = "Private, open-source multimedia, funded by you. No ads, no tracking, no compromise. Free for everyone to use. Donate now to support VideoLAN.";
+"DONATION_WINDOW_TITLE" = "Make a Donation to VideoLAN";
+"DONATE_CC_DC" = "Credit or Debit card";
+"DONATION_CHOOSE_PP" = "Please select your payment provider";
+"DONATION_CHOOSE_CURRENCY" = "Please select a currency";
+"DONATION_AMOUNT" = "Donation amount: %@";
+"DONATION_CC_NUM" = "Credit Card Number";
+"DONATION_CC_EXPIRY_DATE" = "Expiry Date";
+"DONATION_CC_EXPIRY_DATE_MONTH" = "MM";
+"DONATION_CC_EXPIRY_DATE_YEAR" = "YY";
+"DONATION_CC_CVV" = "CVV";
+"DONATION_APPLE_PAY_NOT_POSSIBLE" = "Failure configuring Apple Pay";
+"DONATION_APPLE_PAY_NOT_POSSIBLE_LONG" = "VLC failed to configure Apple Pay to perform your donation. Please choose a different payment provider to continue.";
+"DONATION_DONATE_BUTTON" = "Donate";
+"PURCHASE_FAILED" = "Purchase Failed.";
+"SEND_DONATION" = "Send your donation";
+"PURCHASE_SUCESS_TITLE" = "Donation sent";
+"PURCHASE_SUCESS_DESCRIPTION" = "Thank you for your donation!";
+"DONATION_CONTINUE" = "Continue";
+"BUTTON_NOT_NOW" = "Not now";
+"DONATION_NAGSCREEN_TITLE" = "Donate today";
+"DONATION_NAGSCREEN_SUBTITLE" = "Support free and open source multimedia";
+"DONATION_INVOICES" = "Invoices";
+"DONATION_RECEIPTS" = "Receipts";
+"DONATION_INVOICES_RECEIPTS" = "Invoices & Receipts";
+"DONATION_CHARGES_CLEARED_ON_REINSTALL" = "If you have reinstalled VLC, invoices or receipts from previous donations will not be available as all your personal information is stored on this device only.\n\nIf you have any questions, contact us at donation@videolan.org and mention this anonymous user ID: %@";
+"DONATION_CANCEL_MONTHLY" = "Cancel Regular Donation";
+"DONATION_MONTHLY" = "Monthly";
+"DONATION_MONTHLY_FORMAT" = "%@/month";
+"DONATION_ONCE" = "One-Time";
+"DONATION_UPDATE_MONTHLY" = "Update Regular Donation";
+"DONATION_VIDEOLAN" = "Donation to VideoLAN";
+"DONATION_CANCEL_LONG" = "We are sad to see you cancelling the regular monthly donations to VideoLAN. Your previous support means a lot to us. Thank you so much!";
+"DONATION_BANK_TRANSFER" = "Bank Transfer";
+"DONATION_BANK_TRANSFER_LONG" = "Stripe processes donations made to VideoLAN. VideoLAN does not store or collect your personal information.";
+"DONATION_BUTTON_AGREE" = "Agree";
+"DONATION_IBAN" = "Bank Account Number (IBAN)";
+"DONATION_EMAIL" = "Email";
+"DONATION_NAME" = "Name";
+"DONATION_NAME_BANK_ACCOUNT" = "Name on Bank Account";
+"DONATION_EMBARGOED_COUNTRY" = "We currently cannot accept donations in your country. Enjoy VLC!";
+
+// MARK: - Playback keyboard shortcuts
+
+"KEY_JUMP_BACKWARDS" = "Jump backwards";
+"KEY_JUMP_FORWARDS" = "Jump forwards";
+"KEY_INCREASE_PLAYBACK_SPEED" = "Increase playback speed";
+"KEY_DECREASE_PLAYBACK_SPEED" = "Decrease playback speed";
+"KEY_RESET_PLAYBACK_SPEED" = "Reset playback speed";
+"KEY_DECREASE_SUBTITLE_DELAY" = "Decrease subtitle delay";
+"KEY_INCREASE_SUBTITLE_DELAY" = "Increase subtitle delay";
+"KEY_DECREASE_AUDIO_DELAY" = "Decrease audio delay";
+"KEY_INCREASE_AUDIO_DELAY" = "Increase audio delay";
+"KEY_SEEK_TO_PERCENT" = "Seek to %i%% of duration";
+"KEY_NEXT_FRAME" = "Jump to the next frame";
+
+// MARK: - Custom Playback Speed
+
+
+// MARK: - Custom Setting Value
+
+"SETTINGS_CUSTOM_VALUE_MESSAGE" = "Enter a value between %@ and %@";
+"SETTINGS_CUSTOM_VALUE_ERROR" = "Please enter a valid value between %@ and %@";
+
+// MARK: - TitleSelection
+
+
+// MARK: - NEW DELETE STRINGS
+"DELETE_SINGLE_TITLE" = "Delete \"%@\"?";
+"DELETE_MULTIPLE_TITLE" = "Delete \"%@\" and %d others?";
+
+// MARK: - AppIntent Strings
+"APPINTENT_PLAY_MEDIA_TITLE" = "Play in the background";
+"APPINTENT_PLAY_MEDIA_DESCRIPTION" = "Play the selected playlist in the background without opening the app.";
+"APPINTENT_PLAY_MEDIA_PLAY_${mediaName}" = "Play ${mediaName} in the background";
+
+// MARK: - Audio App Intent Strings
+"APPINTENT_ERROR_NO_MEDIA" = "No matching media was found in your library.";
+"APPINTENT_ERROR_PLAYLIST_UPDATE" = "The playlist could not be updated.";
+"APPINTENT_ERROR_PLAYBACK_START" = "Playback could not be started.";
+"APPINTENT_AFFINITY_FAVORITE" = "Favorite";
+"APPINTENT_AFFINITY_NOT_FAVORITE" = "Not a Favorite";
+"APPINTENT_AFFINITY_UNSET" = "Unset";
+
+// MARK: - Video App Intent Strings
+"APPINTENT_PLAY_VIDEO_TITLE" = "Play Video";
+"APPINTENT_PLAY_VIDEO_DESCRIPTION" = "Play a video from your library.";
+"APPINTENT_PLAY_VIDEO_PARAM" = "Video";
+"APPINTENT_PLAY_VIDEO_PLAY_${video}" = "Play ${video}";
+
+// MARK: - Radio App Intent Strings
+"APPINTENT_PLAY_RADIO_TITLE" = "Play Radio Station";
+"APPINTENT_PLAY_RADIO_DESCRIPTION" = "Play a radio station in VLC.";
+"APPINTENT_PLAY_RADIO_PLAY_${station}" = "Play ${station}";
+"APPINTENT_PLAY_RADIO_PROMPT" = "Which radio station would you like to play?";
+
+// MARK: - AppShortcut Strings
+"APPSHORTCUT_PLAY_MEDIA_SHORT_TITLE" = "Play Media";
+"APPSHORTCUT_PLAY_MEDIA_PHRASE_PLAY_${applicationName}" = "Play media in ${applicationName}";
+"APPSHORTCUT_PLAY_MEDIA_PHRASE_PLAYLIST_${applicationName}" = "Play a playlist in ${applicationName}";
+"APPSHORTCUT_PLAY_MEDIA_PHRASE_START_${applicationName}" = "Start playback in ${applicationName}";
+"APPSHORTCUT_PLAY_AUDIO_SHORT_TITLE" = "Play Audio";
+"APPSHORTCUT_PLAY_AUDIO_PHRASE_PLAY_${applicationName}" = "Play audio in ${applicationName}";
+"APPSHORTCUT_PLAY_AUDIO_PHRASE_SONG_${applicationName}" = "Play a song in ${applicationName}";
+"APPSHORTCUT_PLAY_VIDEO_SHORT_TITLE" = "Play Video";
+"APPSHORTCUT_PLAY_VIDEO_PHRASE_PLAY_${applicationName}" = "Play a video in ${applicationName}";
+"APPSHORTCUT_PLAY_VIDEO_PHRASE_WATCH_${applicationName}" = "Watch a video in ${applicationName}";
+"APPSHORTCUT_ADD_TO_PLAYLIST_SHORT_TITLE" = "Add to Playlist";
+"APPSHORTCUT_ADD_TO_PLAYLIST_PHRASE_${applicationName}" = "Add a song to a playlist in ${applicationName}";
+"APPSHORTCUT_UPDATE_AFFINITY_SHORT_TITLE" = "Favorite";
+"APPSHORTCUT_UPDATE_AFFINITY_PHRASE_${applicationName}" = "Favorite audio in ${applicationName}";
+"APPSHORTCUT_PLAY_RADIO_SHORT_TITLE" = "Play Radio";
+"APPSHORTCUT_PLAY_RADIO_PHRASE_PLAY_${applicationName}" = "Play radio in ${applicationName}";
+"APPSHORTCUT_PLAY_RADIO_PHRASE_LISTEN_${applicationName}" = "Listen to radio in ${applicationName}";
+
+// MARK: - VerticalSliderControl Strings
+"VERTICAL_SLIDER_CONTROL_ACCESSIBILITY_LABEL" = "Vertical slider";
+"VERTICAL_SLIDER_CONTROL_INCREMENT_ACTION" = "Increment";
+"VERTICAL_SLIDER_CONTROL_DECREMENT_ACTION" = "Decrement";
+
+// MARK: - Download Completion Announcement
+"DOWNLOAD_COMPLETED_ANNOUNCEMENT" = "Downloading file \"%@\" completed";
+
+//MARK: - Playlist Add Action Status
+"ADD_TO_PLAYLIST_STATUS_MESSAGE" = "Added %d media to %@";
+"ADD_ALERT_TITLE" = "Selection found in playlist";
+"ADD_ALERT_MESSAGE_SINGLE" = "You are trying to add a media that is already part of %@";
+"ADD_ALERT_MESSAGE_MULTIPLE" = "You are trying to add %d media that are already part of %@";
+
+//MARK: - Last played playlist indicator
+"LAST_PLAYED_PLAYLIST_LABEL_TITLE" = "Last Played";
+
+//MARK - something with folders
+"BUTTON_FOLDER_HINT" = "Browse your folders";
+"EMPTY_FOLDER" = "Empty Folder";
+"EMPTY_FOLDER_DES_VIDEO" = "We couldn't find any videos here. This folder may still contain audio files.";
+"EMPTY_FOLDER_DES_AUDIO" = "We couldn't find any audio files here. This folder may still contain videos.";
+"SUBFOLDER_DESCRIPTION" = "1 folder";
+"SUBFOLDERS_DESCRIPTION" = "%d folders";
+"FOLDER_LOCATION_DEVICE" = "On This Device";
+"FOLDER_LOCATION_EXTERNAL_DRIVE" = "External Drive";
+"FOLDER_LOCATION_ICLOUD_DRIVE" = "iCloud Drive";
+"ADD_EXTERNAL_FOLDER" = "Add External Folder…";
+"EXTERNAL_FOLDER_NOT_ADDED" = "Folder Not Added";
+"EXTERNAL_FOLDER_OVERLAPPING" = "This folder is already part of your library.";
+"EXTERNAL_FOLDER_FAILED" = "VLC can't access this folder.";
+"REMOVE_FROM_LIBRARY" = "Remove from Library";
+
+"ACCESSIBILITY_SELECTED" = "selected";
+"TRACK_SELECTOR_OFF" = "Off";
+"TRACK_INDEX_FORMAT" = "Track %d";
+"AUDIO_CHANNELS_MONO" = "Mono";
+"AUDIO_CHANNELS_STEREO" = "Stereo";
+"AUDIO_CHANNELS_FORMAT" = "%u channels";
+"SECOND_SUBTITLE" = "Second Subtitle";
+"SYNC" = "Sync";
+"NO_DELAY" = "No delay";
+"SUBTITLE_ASSIGN_PRIMARY" = "Assign primary subtitle";
+"SUBTITLE_ASSIGN_SECONDARY" = "Assign secondary subtitle";
+"LAST_PLAYED" = "Last played";
+"LAST_PLAYED_MEDIALIST" = "Last played medialist";
+"SHARE_EXTENSION_IMPORTING" = "Adding to VLC…";
+"SHARE_EXTENSION_IMPORTED" = "Added to VLC";
+"SHARE_EXTENSION_FAILED" = "Could not add to VLC";
+
+// MARK: - Player WatchOS
+"TRACKS_WO_COUNTER" = "Tracks";
+
+// MARK: - Radio Stations WatchOS
+"STATION_LOAD_ERROR" = "There's been an error loading the station. Please try again.";
+"RADIO_GENERIC_ERROR" = "Something went wrong";
+"RADIO_DATA_LOAD_ERROR" = "There's been an error loading the data";
+"DISCOVER_LABEL" = "Discover";
+"RECENTS" = "Recents";
+
+
+// MARK: - Media library corruption
+"MEDIALIBRARY_CORRUPTION_TITLE" = "Media Library damaged";
+"MEDIALIBRARY_CORRUPTION_MESSAGE" = "VLC needs to rebuild its media library due to corruption. Playlists and playback positions may be lost. Send us the damaged database, which includes the names of your media and playlists, so we can find out why?";
+"MEDIALIBRARY_CORRUPTION_SEND" = "Send Report";
+"MEDIALIBRARY_CORRUPTION_DISMISS" = "Don't Send";
+"MEDIALIBRARY_CORRUPTION_EMAIL_TITLE" = "Damaged media library database";

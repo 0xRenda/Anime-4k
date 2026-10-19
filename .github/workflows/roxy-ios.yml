@@ -1,0 +1,108 @@
+name: Build Roxy Player IPA
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      quality:
+        description: Default quality (all creates Low, Medium and High IPAs)
+        type: choice
+        options: [all, automatic, low, medium, high]
+        default: all
+      signed:
+        description: Sign with Apple certificate and provisioning profile secrets
+        type: boolean
+        default: false
+      export_method:
+        description: Must match the provisioning profile type
+        type: choice
+        options: [release-testing, debugging, app-store-connect]
+        default: release-testing
+
+permissions:
+  contents: read
+
+concurrency:
+  group: roxy-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python tools/port_anime4k.py --check
+      - run: python -m unittest discover -s tests -p 'test_*.py' -v
+      - name: Check shell syntax
+        run: for script in tools/*.sh; do bash -n "$script"; done
+
+  ipa:
+    needs: verify
+    runs-on: macos-26
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        quality: ${{ fromJSON(inputs.quality == 'all' && '["low","medium","high"]' || format('["{0}"]', inputs.quality || 'automatic')) }}
+    env:
+      ROXY_QUALITY: ${{ matrix.quality }}
+      ROXY_BUNDLE_ID: ${{ vars.ROXY_BUNDLE_ID || 'com.roxy.player' }}
+      ROXY_APP_GROUP: ${{ vars.ROXY_APP_GROUP || format('group.{0}', vars.ROXY_BUNDLE_ID || 'com.roxy.player') }}
+      ROXY_EXPORT_METHOD: ${{ inputs.export_method || 'release-testing' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.3'
+          bundler-cache: true
+      - run: ruby -c tools/prepare_ci.rb
+      - uses: actions/cache@v4
+        with:
+          path: |
+            vlc-ios-master/Pods
+            .build/SourcePackages
+            ~/Library/Caches/CocoaPods
+          key: roxy-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('vlc-ios-master/Podfile.lock', 'vlc-ios-master/VLC.xcworkspace/xcshareddata/swiftpm/Package.resolved') }}
+      - name: Import signing credentials
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.signed }}
+        env:
+          IOS_CERTIFICATE_P12_BASE64: ${{ secrets.IOS_CERTIFICATE_P12_BASE64 }}
+          IOS_CERTIFICATE_PASSWORD: ${{ secrets.IOS_CERTIFICATE_PASSWORD }}
+          IOS_PROVISION_PROFILE_BASE64: ${{ secrets.IOS_PROVISION_PROFILE_BASE64 }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: bash tools/install_signing.sh
+      - name: Validate Metal compilation and CPU parity
+        run: bash tools/test_metal.sh
+      - name: Compile, archive and package
+        env:
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          BUILD_MODE: ${{ github.event_name == 'workflow_dispatch' && inputs.signed && 'signed' || 'unsigned' }}
+        run: bash tools/build_ipa.sh "$BUILD_MODE"
+      - name: Upload IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: Roxy-Player-${{ matrix.quality }}-${{ inputs.signed && 'signed' || 'unsigned' }}
+          path: build/*.ipa
+          if-no-files-found: error
+          retention-days: 14
+      - name: Upload build logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Roxy-logs-${{ matrix.quality }}
+          path: build/*.log
+          if-no-files-found: ignore
+      - name: Remove temporary signing credentials
+        if: ${{ always() && github.event_name == 'workflow_dispatch' && inputs.signed }}
+        shell: bash
+        run: |
+          security delete-keychain "$RUNNER_TEMP/roxy-signing.keychain-db" || true
+          rm -f "$RUNNER_TEMP/roxy-certificate.p12" "$RUNNER_TEMP/roxy.mobileprovision" "$RUNNER_TEMP/roxy-profile.plist"
+          if [[ -n "${ROXY_PROFILE_UUID:-}" ]]; then
+            rm -f "$HOME/Library/MobileDevice/Provisioning Profiles/$ROXY_PROFILE_UUID.mobileprovision"
+          fi

@@ -1,0 +1,509 @@
+/*****************************************************************************
+ * VLCNetworkServerBrowserViewController.m
+ * VLC for iOS
+ *****************************************************************************
+ * Copyright (c) 2013-2017 VideoLAN. All rights reserved.
+ * $Id$
+ *
+ * Authors: Felix Paul Kühne <fkuehne # videolan.org>
+ *          Pierre SAGASPE <pierre.sagaspe # me.com>
+ *          Tobias Conradi <videolan # tobias-conradi.de>
+ *          Diogo Simao Marques <dogo@videolabs.io>
+ *
+ * Refer to the COPYING file of the official project for license.
+ *****************************************************************************/
+
+#import "VLCNetworkServerBrowserViewController.h"
+#import "VLCNetworkListCell.h"
+#import "VLCActivityManager.h"
+#import "VLCStatusLabel.h"
+#import "VLCPlaybackService.h"
+#import "VLCFavoriteService.h"
+
+#import "VLCNetworkServerBrowser-Protocol.h"
+#import "VLCNetworkServerBrowserVLCMedia.h"
+#import "VLCServerBrowsingController.h"
+#import "UIBarButtonItem+Theme.h"
+
+#import "VLC-Swift.h"
+
+@interface VLCNetworkServerBrowserViewController () <VLCNetworkServerBrowserDelegate,VLCNetworkListCellDelegate, UITableViewDataSource, UITableViewDelegate, UIActionSheetDelegate>
+{
+    UIRefreshControl *_refreshControl;
+    MediaLibraryService *_medialibraryService;
+    VLCFavoriteService *_favoriteService;
+    BOOL _isSearching;
+    UIBarButtonItem *_sortBarButtonItem;
+}
+@property (nonatomic) id<VLCNetworkServerBrowser> serverBrowser;
+@property (nonatomic) VLCServerBrowsingController *browsingController;
+@property (nonatomic) NSArray<id<VLCNetworkServerBrowserItem>> *searchArray;
+@end
+
+@implementation VLCNetworkServerBrowserViewController
+
+- (instancetype)initWithServerBrowser:(id<VLCNetworkServerBrowser>)browser
+                  medialibraryService:(MediaLibraryService *)medialibraryService
+
+{
+    self = [super init];
+    if (self) {
+        _medialibraryService = medialibraryService;
+        _serverBrowser = browser;
+        browser.delegate = self;
+        _browsingController = [[VLCServerBrowsingController alloc]
+                               initWithViewController:self
+                               serverBrowser:browser
+                               medialibraryService:_medialibraryService];
+        _favoriteService = [[VLCAppCoordinator sharedInstance] favoriteService];
+    }
+    return self;
+}
+
+- (void)viewDidLoad
+{
+    [super viewDidLoad];
+
+    _refreshControl = [[UIRefreshControl alloc] init];
+    _refreshControl.tintColor = PresentationTheme.current.colors.orangeUI;
+    [_refreshControl addTarget:self action:@selector(handleRefresh) forControlEvents:UIControlEventValueChanged];
+    self.tableView.refreshControl = _refreshControl;
+
+    self.tableView.backgroundColor = PresentationTheme.current.colors.background;
+    NSNotificationCenter *notificationCenter = [NSNotificationCenter defaultCenter];
+    [notificationCenter addObserver:self selector:@selector(themeDidChange) name:kVLCThemeDidChangeNotification object:nil];
+
+    self.title = self.serverBrowser.title;
+    [self update];
+}
+
+- (void)viewWillAppear:(BOOL)animated
+{
+    [super viewWillAppear:animated];
+    [self updateUI];
+}
+
+- (void)viewDidAppear:(BOOL)animated
+{
+    [super viewDidAppear:animated];
+
+    // The container selected has already been parsed and is empty
+    if ([_serverBrowser isKindOfClass:[VLCNetworkServerBrowserVLCMedia class]] &&
+        [(VLCNetworkServerBrowserVLCMedia *)_serverBrowser retrieveParsedStatus] == VLCMediaParsedStatusDone &&
+        _serverBrowser.items.count == 0) {
+        [self stopActivityIndicator];
+        [self removePlayAllAction];
+    }
+}
+
+- (void)networkServerBrowserDidUpdate:(id<VLCNetworkServerBrowser>)networkBrowser
+{
+    [self updateUI];
+    [[VLCActivityManager defaultManager] networkActivityStopped];
+    [_refreshControl endRefreshing];
+}
+
+- (void)networkServerBrowserShouldPopView:(id<VLCNetworkServerBrowser>)networkBrowser
+{
+    [self.navigationController popViewControllerAnimated:YES];
+}
+
+- (void)networkServerBrowserEndParsing:(id<VLCNetworkServerBrowser>)networkBrowser
+{
+    [self stopActivityIndicator];
+    [self removePlayAllActionIfNeeded];
+}
+
+- (void)networkServerBrowser:(id<VLCNetworkServerBrowser>)networkBrowser requestDidFailWithError:(NSError *)error
+{
+    [VLCAlertViewController alertViewManagerWithTitle:NSLocalizedString(@"LOCAL_SERVER_CONNECTION_FAILED_TITLE", nil)
+                                         errorMessage:NSLocalizedString(@"LOCAL_SERVER_CONNECTION_FAILED_MESSAGE", nil)
+                                       viewController:self];
+}
+
+- (UIStatusBarStyle)preferredStatusBarStyle
+{
+    return PresentationTheme.current.colors.statusBarStyle;
+}
+
+- (void)updateUI
+{
+    [self.tableView reloadData];
+    self.title = self.serverBrowser.title;
+
+    if (@available(iOS 26.0, *)) {
+        if ([self.serverBrowser respondsToSelector:@selector(favoriteGroupName)] &&
+            [self.serverBrowser.favoriteGroupName isEqualToString:VLCFavoriteGroupRadio]) {
+#if TARGET_OS_IOS
+            NSUInteger stationCount = self.serverBrowser.items.count;
+            self.navigationItem.subtitle = stationCount > 0
+                ? [NSString stringWithFormat:NSLocalizedString(@"STATION_COUNT", nil), (unsigned long)stationCount]
+                : nil;
+#endif
+        }
+    }
+}
+
+- (void)update
+{
+    [self.serverBrowser update];
+    [[VLCActivityManager defaultManager] networkActivityStarted];
+}
+
+- (void)handleRefresh
+{
+    [self update];
+}
+
+- (void)removePlayAllActionIfNeeded
+{
+    if ([_serverBrowser.items count] == 0) {
+        [self removePlayAllAction];
+    }
+}
+
+#pragma mark - sorting
+
+- (VLCNetworkServerBrowserVLCMedia *)sortableBrowser
+{
+    if ([_serverBrowser isKindOfClass:[VLCNetworkServerBrowserVLCMedia class]]) {
+        return (VLCNetworkServerBrowserVLCMedia *)_serverBrowser;
+    }
+    return nil;
+}
+
+- (UIBarButtonItem *)sortBarButtonItem
+{
+    if (![self sortableBrowser]) {
+        return nil;
+    }
+    if (!_sortBarButtonItem) {
+        _sortBarButtonItem = [[UIBarButtonItem alloc] initWithImage:[UIImage systemImageNamed:@"arrow.up.arrow.down"]
+                                                               menu:[self sortMenu]];
+        _sortBarButtonItem.accessibilityLabel = NSLocalizedString(@"SORT", nil);
+    }
+    return _sortBarButtonItem;
+}
+
+- (UIMenu *)sortMenu
+{
+    NSArray<UIAction *> *actions = @[
+        [self sortActionForCriteria:VLCMediaListSortCriteriaDefault title:NSLocalizedString(@"DEFAULT", nil)],
+        [self sortActionForCriteria:VLCMediaListSortCriteriaName title:NSLocalizedString(@"NAME", nil)],
+        [self sortActionForCriteria:VLCMediaListSortCriteriaModificationDate title:NSLocalizedString(@"MODIFIED_DATE", nil)],
+        [self sortActionForCriteria:VLCMediaListSortCriteriaSize title:NSLocalizedString(@"FILE_SIZE", nil)],
+    ];
+    return [UIMenu menuWithTitle:NSLocalizedString(@"SORT_BY", nil) children:actions];
+}
+
+- (UIAction *)sortActionForCriteria:(VLCMediaListSortCriteria)criteria title:(NSString *)title
+{
+    VLCNetworkServerBrowserVLCMedia *browser = [self sortableBrowser];
+    BOOL active = browser.sortCriteria == criteria;
+    UIImage *image = nil;
+    if (active && criteria != VLCMediaListSortCriteriaDefault) {
+        image = [UIImage systemImageNamed:browser.sortAscending ? @"chevron.up" : @"chevron.down"];
+    }
+    __weak typeof(self) weakSelf = self;
+    UIAction *action = [UIAction actionWithTitle:title
+                                           image:image
+                                      identifier:nil
+                                         handler:^(__kindof UIAction * _Nonnull action) {
+        [weakSelf applySortCriteria:criteria];
+    }];
+    action.state = active ? UIMenuElementStateOn : UIMenuElementStateOff;
+    return action;
+}
+
+- (void)applySortCriteria:(VLCMediaListSortCriteria)criteria
+{
+    VLCNetworkServerBrowserVLCMedia *browser = [self sortableBrowser];
+    if (!browser) {
+        return;
+    }
+
+    BOOL ascending;
+    if (criteria == browser.sortCriteria && criteria != VLCMediaListSortCriteriaDefault) {
+        ascending = !browser.sortAscending;
+    } else {
+        ascending = (criteria == VLCMediaListSortCriteriaName);
+    }
+    [browser setSortCriteria:criteria ascending:ascending];
+    _sortBarButtonItem.menu = [self sortMenu];
+}
+
+- (void)addPlayAllAction
+{
+    NSMutableArray<UIBarButtonItem *> *rightItems = [NSMutableArray arrayWithObject:[UIBarButtonItem themedPlayAllButtonWithTarget:self andSelector:@selector(playAllAction:)]];
+    UIBarButtonItem *sortButton = [self sortBarButtonItem];
+    if (sortButton) {
+        [rightItems addObject:sortButton];
+    }
+    self.navigationItem.rightBarButtonItems = rightItems;
+}
+
+- (void)removePlayAllAction
+{
+    UIBarButtonItem *sortButton = [self sortBarButtonItem];
+    self.navigationItem.rightBarButtonItems = sortButton ? @[sortButton] : @[];
+}
+
+#pragma mark - server browser item specifics
+
+- (void)didSelectItem:(id<VLCNetworkServerBrowserItem>)item index:(NSUInteger)index singlePlayback:(BOOL)singlePlayback
+{
+    if (item.isContainer) {
+        VLCNetworkServerBrowserViewController *targetViewController = [[VLCNetworkServerBrowserViewController alloc]
+                                                                       initWithServerBrowser:item.containerBrowser medialibraryService:_medialibraryService];
+
+        [self.navigationController pushViewController:targetViewController animated:YES];
+    } else {
+        if (singlePlayback) {
+            [self.browsingController streamFileForItem:item];
+        } else {
+            NSArray<id<VLCNetworkServerBrowserItem>> *items = _isSearching ? _searchArray : _serverBrowser.items;
+            NSMutableArray<VLCMedia *> *mediaArray = [[NSMutableArray alloc] init];
+            VLCMedia *mediaSelected = items[index].media;
+
+            for (NSInteger i = 0, size = items.count; i < size; i++) {
+                VLCMedia *media = items[i].media;
+                if (media.mediaType != VLCMediaTypeDirectory) {
+                    [mediaArray addObject:media];
+                }
+            }
+
+            VLCMediaList *mediaListToPlay = [[VLCMediaList alloc] initWithArray:mediaArray];
+            [_browsingController configureSubtitlesInMediaList:mediaListToPlay];
+
+            NSUInteger indexToPlay = [mediaListToPlay indexOfMedia:mediaSelected];
+            if (indexToPlay == NSNotFound) {
+                // this means the pointer to the media was manipulated, which does not mean that the media no longer exists
+                NSURL *mediaURL = mediaSelected.url;
+                for (VLCMedia *iter in mediaArray) {
+                    if ([iter.url isEqual:mediaURL]) {
+                        indexToPlay = [mediaArray indexOfObject:iter];
+                    }
+                }
+            }
+            [_browsingController streamMediaList:mediaListToPlay startingAtIndex:indexToPlay];
+        }
+    }
+}
+
+- (void)playAllAction:(id)sender
+{
+    NSArray *items = self.serverBrowser.items;
+
+    NSMutableArray *fileList = [[NSMutableArray alloc] init];
+    for (id<VLCNetworkServerBrowserItem> iter in items) {
+        if (![iter isContainer]) {
+            [fileList addObject:[iter media]];
+        }
+    }
+
+    if (fileList.count > 0) {
+        VLCMediaList *fileMediaList = [[VLCMediaList alloc] initWithArray:fileList];
+        [self.browsingController configureSubtitlesInMediaList:fileMediaList];
+        [self.browsingController streamMediaList:fileMediaList startingAtIndex:0];
+    }
+}
+
+#pragma mark - table view data source, for more see super
+
+- (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section
+{
+    if (_isSearching)
+        return _searchArray.count;
+
+    return self.serverBrowser.items.count;
+}
+
+- (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath
+{
+    VLCNetworkListCell *cell = (VLCNetworkListCell *)[tableView dequeueReusableCellWithIdentifier:VLCNetworkListCellIdentifier];
+    if (cell == nil)
+        cell = [VLCNetworkListCell cellWithReuseIdentifier:VLCNetworkListCellIdentifier];
+
+    id<VLCNetworkServerBrowserItem> item;
+    if (_isSearching) {
+        item = _searchArray[indexPath.row];
+    } else {
+        item = self.serverBrowser.items[indexPath.row];
+    }
+    
+    [self.browsingController configureCell:cell withItem:item];
+    cell.delegate = self;
+    cell.isFavorite = [_favoriteService isFavoriteURL:item.URL];
+
+    return cell;
+}
+
+#pragma mark - table view delegate, for more see super
+
+- (void)tableView:(UITableView *)tableView willDisplayCell:(VLCNetworkListCell *)cell forRowAtIndexPath:(NSIndexPath *)indexPath
+{
+    [super tableView:tableView willDisplayCell:cell forRowAtIndexPath:indexPath];
+
+    if([indexPath row] == ((NSIndexPath*)[[tableView indexPathsForVisibleRows] lastObject]).row)
+        [[VLCActivityManager defaultManager] networkActivityStopped];
+
+    cell.titleLabel.textColor = cell.folderTitleLabel.textColor = cell.subtitleLabel.textColor = cell.thumbnailView.tintColor = PresentationTheme.current.colors.cellTextColor;
+}
+
+- (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath
+{
+    id<VLCNetworkServerBrowserItem> item;
+    NSInteger row = indexPath.row;
+    BOOL singlePlayback = ![[NSUserDefaults standardUserDefaults] boolForKey:kVLCAutomaticallyPlayNextItem];
+    if (_isSearching) {
+        if (row < _searchArray.count) {
+            item = _searchArray[row];
+        }
+    } else {
+        NSArray *items = self.serverBrowser.items;
+        if (row < items.count) {
+            item = items[row];
+        }
+    }
+
+    if (item) {
+        [self didSelectItem:item index:row singlePlayback:singlePlayback];
+    }
+
+    [tableView deselectRowAtIndexPath:indexPath animated:NO];
+}
+
+- (UISwipeActionsConfiguration *)tableView:(UITableView *)tableView trailingSwipeActionsConfigurationForRowAtIndexPath:(NSIndexPath *)indexPath
+{
+    VLCNetworkListCell *cell = (VLCNetworkListCell *)[tableView cellForRowAtIndexPath:indexPath];
+
+    if (!cell || !cell.isFavorable) {
+        return nil;
+    }
+
+    BOOL isFavorite = cell.isFavorite;
+    NSString *title = isFavorite ? NSLocalizedString(@"REMOVE_FAVORITE", nil) : NSLocalizedString(@"ADD_FAVORITE", nil);
+    UIContextualAction *favoriteAction = [UIContextualAction contextualActionWithStyle:UIContextualActionStyleNormal
+                                                                                 title:title
+                                                                               handler:^(UIContextualAction * _Nonnull action,
+                                                                                         UIView * _Nonnull sourceView,
+                                                                                         void (^ _Nonnull completionHandler)(BOOL)) {
+        [self triggerFavoriteForCell:cell];
+        completionHandler(YES);
+    }];
+    favoriteAction.backgroundColor = PresentationTheme.current.colors.orangeUI;
+    favoriteAction.image = [UIImage systemImageNamed:isFavorite ? @"heart.slash" : @"heart.fill"];
+
+    return [UISwipeActionsConfiguration configurationWithActions:@[favoriteAction]];
+}
+
+- (UIContextMenuConfiguration *)tableView:(UITableView *)tableView contextMenuConfigurationForRowAtIndexPath:(NSIndexPath *)indexPath point:(CGPoint)point
+{
+    VLCNetworkListCell *cell = [tableView cellForRowAtIndexPath:indexPath];
+
+    if (!cell || !cell.isFavorable) {
+        return nil;
+    }
+
+    UIContextMenuConfiguration *menuConfiguration = [UIContextMenuConfiguration configurationWithIdentifier:nil
+                                                                                            previewProvider:nil
+                                                                                             actionProvider:^UIMenu * _Nullable(NSArray<UIMenuElement *> * _Nonnull suggestedActions) {
+        NSMutableArray* actions = [[NSMutableArray alloc] init];
+
+        NSString *optionTitle = cell.isFavorite ? NSLocalizedString(@"REMOVE_FAVORITE", "") : NSLocalizedString(@"ADD_FAVORITE", "");
+        UIImage *image = cell.isFavorite ? [UIImage systemImageNamed:@"heart"] : [UIImage systemImageNamed:@"heart.fill"];
+
+        [actions addObject:[UIAction actionWithTitle:optionTitle image:image identifier:nil handler:^(__kindof UIAction * _Nonnull action) {
+            [self triggerFavoriteForCell:cell];
+        }]];
+
+        UIMenu* menu = [UIMenu menuWithTitle:@"" children:actions];
+        return menu;
+    }];
+
+    return menuConfiguration;
+}
+
+#pragma mark - VLCNetworkListCell delegation
+
+- (void)triggerDownloadForCell:(VLCNetworkListCell *)cell
+{
+    id<VLCNetworkServerBrowserItem> item;
+    if (_isSearching)
+        item = _searchArray[[self.tableView indexPathForCell:cell].row];
+    else
+        item = self.serverBrowser.items[[self.tableView indexPathForCell:cell].row];
+
+    if ([self.browsingController triggerDownloadForItem:item]) {
+        [cell.statusLabel showStatusMessage:NSLocalizedString(@"DOWNLOADING", nil)];
+    }
+}
+
+- (void)triggerFavoriteForCell:(VLCNetworkListCell *)cell
+{
+    id<VLCNetworkServerBrowserItem> item;
+    NSIndexPath *indexPath = [self.tableView indexPathForCell:cell];
+    if (_isSearching)
+        item = _searchArray[indexPath.row];
+    else
+        item = self.serverBrowser.items[indexPath.row];
+
+    VLCFavorite *favorite = [[VLCFavorite alloc] init];
+    favorite.url = item.URL;
+    favorite.playable = !item.isContainer;
+    if ([self.serverBrowser respondsToSelector:@selector(favoriteGroupName)]) {
+        favorite.groupName = self.serverBrowser.favoriteGroupName;
+    }
+    if ([item respondsToSelector:@selector(thumbnailURL)]) {
+        favorite.artworkURL = item.thumbnailURL;
+    }
+    if ([item respondsToSelector:@selector(mediaDescription)]) {
+        favorite.mediaDescription = item.mediaDescription;
+    }
+
+    if (!cell.isFavorite) {
+        cell.isFavorite = YES;
+        favorite.userVisibleName = item.name;
+        [_favoriteService addFavorite:favorite];
+    }
+    else {
+        cell.isFavorite = NO;
+        [_favoriteService removeFavorite:favorite];
+    }
+
+    [self.tableView reloadRowsAtIndexPaths:@[indexPath] withRowAnimation:UITableViewRowAnimationFade];
+}
+
+#pragma mark - Search Bar Delegate
+
+- (void)searchBar:(UISearchBar *)searchBar textDidChange:(NSString *)searchText
+{
+    _isSearching = searchText.length > 0;
+    [self searchForText:searchText];
+    [self.tableView reloadData];
+}
+
+- (void)searchBarCancelButtonClicked:(UISearchBar *)searchBar
+{
+    _isSearching = NO;
+    _searchArray = nil;
+    [self.tableView reloadData];
+}
+
+- (void)searchForText:(NSString *)searchString
+{
+    NSPredicate *predicate = [NSPredicate predicateWithFormat:@"name contains[c] %@",searchString];
+    _searchArray = [self.serverBrowser.items filteredArrayUsingPredicate:predicate];
+}
+
+#pragma mark -
+
+- (void)themeDidChange
+{
+    self.tableView.backgroundColor = PresentationTheme.current.colors.background;
+#if TARGET_OS_IOS
+    [self setNeedsStatusBarAppearanceUpdate];
+#endif
+}
+
+@end

@@ -1,0 +1,73 @@
+/*****************************************************************************
+ * VLCAppCoordinator.h
+ * VLC for iOS
+ *****************************************************************************
+ * Copyright (c) 2022-2026 VideoLAN. All rights reserved.
+ * $Id$
+ *
+ * Author: Felix Paul Kühne <fkuehne # videolan.org>
+ *
+ * Refer to the COPYING file of the official project for license.
+ *****************************************************************************/
+#import <Foundation/Foundation.h>
+
+NS_ASSUME_NONNULL_BEGIN
+
+@class MediaLibraryService;
+@class VLCRendererDiscovererManager;
+@class VLCFavoriteService;
+@class VLCRadioService;
+@class VLCSavedServerList;
+@class VLCMLMedia;
+
+#if TARGET_OS_IOS || TARGET_OS_VISION
+@class VLCStripeController;
+@class PodcastStore;
+#endif
+
+#if !TARGET_OS_WATCH
+@class VLCHTTPUploaderController;
+@class VLCTransferController;
+#endif
+
+@interface VLCAppCoordinator : NSObject
+
++ (nonnull instancetype)sharedInstance;
+
+#if !TARGET_OS_WATCH
+@property (readonly) VLCHTTPUploaderController *httpUploaderController;
+@property (readonly) VLCTransferController *transferController;
+@property (readonly) VLCFavoriteService *favoriteService;
+@property (readonly) VLCRadioService *radioService;
+@property (readonly) VLCSavedServerList *savedServerList;
+#endif
+@property (readonly) MediaLibraryService *mediaLibraryService;
+//#if TARGET_OS_WATCH
+@property MediaLibraryService *snapshotMediaLibraryService;
+//#endif
+
+#if !TARGET_OS_WATCH
+@property (readonly) VLCRendererDiscovererManager *rendererDiscovererManager;
+@property (retain) UITabBarController *tabBarController;
+@property (nullable) UIWindow *externalWindow;
+#endif
+
+#if TARGET_OS_IOS || TARGET_OS_VISION
+@property (readonly) VLCStripeController *stripeController;
+@property (readonly) PodcastStore *podcastStore;
+#endif
+
+#if TARGET_OS_IOS || TARGET_OS_VISION
+- (void)handleShortcutItem:(UIApplicationShortcutItem *)shortcutItem;
+- (void)setTabBarController:(UITabBarController *)tabBarController;
+- (VLCMLMedia *)mediaForUserActivity:(NSUserActivity *)userActivity;
+- (void)showTabForMedia:(VLCMLMedia *)media;
+#endif
+
+#if TARGET_OS_WATCH
+- (nullable VLCMLMedia *)mediaForUserActivity:(NSUserActivity *)userActivity;
+#endif
+
+@end
+
+NS_ASSUME_NONNULL_END

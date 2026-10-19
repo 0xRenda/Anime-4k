@@ -1,0 +1,208 @@
+/*****************************************************************************
+ * CollectionModel.swift
+ *
+ * Copyright © 2019 VLC authors and VideoLAN
+ *
+ * Authors: Carola Nitz <nitz.carola # gmail.com>
+ *
+ * Refer to the COPYING file of the official project for license.
+ *****************************************************************************/
+
+import Foundation
+
+class CollectionModel: MLBaseModel {
+    var currentPage: Int = 0
+    var hasMorePages: Bool = false
+    var isLoading: Bool = false
+
+    func fetchPage(offset: Int, limit: Int) -> [VLCMLMedia] {
+        return []
+    }
+
+    func getMedia() {
+        // dummy
+    }
+
+    typealias MLType = VLCMLMedia
+
+    var sortModel = SortModel([.alpha, .duration, .insertionDate, .releaseDate, .fileSize, .lastPlaybackDate, .playCount])
+
+    var mediaCollection: MediaCollectionModel
+
+    var thumbnail: UIImage?
+
+    var medialibrary: MediaLibraryService
+
+    var observable = VLCObservable<MediaLibraryBaseModelObserver>()
+
+    var fileArrayLock = NSRecursiveLock()
+    var files = [VLCMLMedia]()
+
+    var cellType: BaseCollectionViewCell.Type {
+        if mediaCollection is VLCMLMediaGroup {
+            return UserDefaults.standard.bool(forKey: "\(kVLCVideoLibraryGridLayout)\(String(describing: type(of: mediaCollection)) + name)") ?
+                                              MovieCollectionViewCell.self : MediaCollectionViewCell.self
+        } else {
+            return UserDefaults.standard.bool(forKey: "\(kVLCAudioLibraryGridLayout)\(String(describing: type(of: mediaCollection)) + name)") ?
+                                              MediaGridCollectionCell.self : MediaCollectionViewCell.self
+        }
+    }
+
+    var name: String = "Collections"
+
+    var indicatorName: String = NSLocalizedString("SONGS", comment: "")
+
+    required init(medialibrary: MediaLibraryService) {
+        preconditionFailure("")
+    }
+
+    required init(mediaService: MediaLibraryService, mediaCollection: MediaCollectionModel) {
+        defer {
+            fileArrayLock.unlock()
+        }
+        self.medialibrary = mediaService
+        self.mediaCollection = mediaCollection
+        self.name += String(describing: type(of: mediaCollection))
+
+        self.sortModel = mediaCollection.sortModel() ?? self.sortModel
+
+        var sortingCriteria: VLCMLSortingCriteria = .default
+
+        if mediaCollection is VLCMLArtist
+            || mediaCollection is VLCMLGenre
+            || mediaCollection is VLCMLAlbum {
+            sortingCriteria = .album
+        }
+
+        self.sortModel.currentSort = sortingCriteria
+
+        self.thumbnail = mediaCollection.thumbnail()
+
+        fileArrayLock.lock()
+        files = mediaCollection.files() ?? []
+        medialibrary.observable.addObserver(self)
+    }
+
+    func append(_ item: VLCMLMedia) {
+        defer {
+            fileArrayLock.unlock()
+        }
+        fileArrayLock.lock()
+        files.append(item)
+    }
+
+    func delete(_ items: [MLType]) {
+        defer {
+            fileArrayLock.unlock()
+        }
+        if let playlist = mediaCollection as? VLCMLPlaylist {
+            fileArrayLock.lock()
+            for case let media in items {
+                if let index = files.firstIndex(of: media) {
+                    playlist.removeMedia(fromPosition: UInt32(index))
+                }
+            }
+        } else {
+            do {
+                for case let media in items {
+                    if let mainFile = media.mainFile() {
+                        mainFile.delete()
+                    }
+                }
+                medialibrary.reload()
+            }
+            fileArrayLock.lock()
+            filterFilesFromDeletion(of: items)
+        }
+    }
+
+    func reorderFiles(to order: [Int]) {
+        defer {
+            fileArrayLock.unlock()
+        }
+        fileArrayLock.lock()
+        guard let playlist = mediaCollection as? VLCMLPlaylist,
+              order.count == files.count else {
+            return
+        }
+
+        var currentOrder = Array(files.indices)
+        for (position, index) in order.enumerated() where currentOrder[position] != index {
+            guard let currentPosition = currentOrder.firstIndex(of: index) else {
+                continue
+            }
+            playlist.moveMedia(fromPosition: UInt32(currentPosition), toDestination: UInt32(position))
+            currentOrder.remove(at: currentPosition)
+            currentOrder.insert(index, at: position)
+        }
+        files = order.map { files[$0] }
+    }
+
+    func sort(by criteria: VLCMLSortingCriteria, desc: Bool) {
+        defer {
+            fileArrayLock.unlock()
+        }
+        fileArrayLock.lock()
+        files = mediaCollection.files(with: criteria, desc: desc) ?? []
+        sortModel.currentSort = criteria
+        sortModel.desc = desc
+        observable.notifyObservers {
+            $0.mediaLibraryBaseModelReloadView()
+        }
+    }
+}
+
+// MARK: - MediaLibraryObserver
+extension CollectionModel: MediaLibraryObserver {
+    func medialibrary(_ medialibrary: MediaLibraryService,
+                      didModifyPlaylistsWithIds playlistsIds: [NSNumber]) {
+        guard mediaCollection is VLCMLPlaylist else { return }
+        fileArrayLock.lock()
+        defer { fileArrayLock.unlock() }
+        files = mediaCollection.files(with: sortModel.currentSort, desc: sortModel.desc) ?? []
+        observable.notifyObservers {
+            $0.mediaLibraryBaseModelReloadView()
+        }
+    }
+
+    func medialibrary(_ medialibrary: MediaLibraryService, didModifyTracks tracks: [VLCMLMedia]) {
+        fileArrayLock.lock()
+        defer { fileArrayLock.unlock() }
+        files = mediaCollection.files(with: sortModel.currentSort, desc: sortModel.desc) ?? []
+        observable.notifyObservers {
+            $0.mediaLibraryBaseModelReloadView()
+        }
+    }
+
+    func medialibrary(_ medialibrary: MediaLibraryService, didDeleteMediaWithIds ids: [NSNumber]) {
+        fileArrayLock.lock()
+        defer { fileArrayLock.unlock() }
+        files = mediaCollection.files(with: sortModel.currentSort, desc: sortModel.desc) ?? []
+        observable.notifyObservers {
+            $0.mediaLibraryBaseModelReloadView()
+        }
+    }
+
+    func medialibrary(_ medialibrary: MediaLibraryService,
+                      thumbnailReady media: VLCMLMedia,
+                      type: VLCMLThumbnailSizeType, success: Bool) {
+        guard success else {
+            return
+        }
+        fileArrayLock.lock()
+        defer { fileArrayLock.unlock() }
+        files = mediaCollection.files(with: sortModel.currentSort, desc: sortModel.desc) ?? []
+        observable.notifyObservers {
+            $0.mediaLibraryBaseModelReloadView()
+        }
+    }
+
+    func medialibraryDidStartRescan() {
+        defer {
+            fileArrayLock.unlock()
+        }
+        fileArrayLock.lock()
+        files.removeAll()
+    }
+}
+

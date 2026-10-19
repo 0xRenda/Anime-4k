@@ -1,0 +1,234 @@
+/*****************************************************************************
+ * VLCLocalNetworkListViewController
+ * VLC for iOS
+ *****************************************************************************
+ * Copyright (c) 2013-2018 VideoLAN. All rights reserved.
+ * $Id$
+ *
+ * Authors: Felix Paul Kühne <fkuehne # videolan.org>
+ *          Pierre SAGASPE <pierre.sagaspe # me.com>
+ *
+ * Refer to the COPYING file of the official project for license.
+ *****************************************************************************/
+
+#import "VLCNetworkListViewController.h"
+#import "VLCNetworkListCell.h"
+#import "VLCPlaybackService.h"
+#import "VLCPlayerDisplayController.h"
+#import "UIScrollView+VLCKeyboardAdjustment.h"
+
+#import "VLC-Swift.h"
+
+NSString *VLCNetworkListCellIdentifier = @"VLCNetworkListCellIdentifier";
+
+@interface VLCNetworkListViewController () <UITableViewDataSource, UITableViewDelegate, UISearchBarDelegate, UISearchControllerDelegate, UISearchResultsUpdating>
+{
+    NSMutableArray *_searchData;
+    UITapGestureRecognizer *_tapTwiceGestureRecognizer;
+    VLCPulsingConeView *_coneLoadingView;
+}
+
+@end
+
+@implementation VLCNetworkListViewController
+
+- (void)loadView
+{
+    _tableView = [[UITableView alloc] initWithFrame:CGRectZero style:[self tableViewStyle]];
+    _tableView.backgroundColor = PresentationTheme.current.colors.background;
+    _tableView.delegate = self;
+    _tableView.dataSource = self;
+    _tableView.opaque = YES;
+    _tableView.rowHeight = [VLCNetworkListCell heightOfCell];
+    _tableView.separatorStyle = UITableViewCellSeparatorStyleNone;
+    _tableView.indicatorStyle = UIScrollViewIndicatorStyleWhite;
+    self.view = _tableView;
+
+    _coneLoadingView = [[VLCPulsingConeView alloc] initWithFrame:_tableView.bounds];
+    _coneLoadingView.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
+    [_coneLoadingView startAnimating];
+    [self.view addSubview:_coneLoadingView];
+}
+
+- (void)viewDidLoad
+{
+    [super viewDidLoad];
+
+    self.tableView.separatorColor = PresentationTheme.current.colors.separatorColor;
+    UIColor *backgroundColor = PresentationTheme.current.colors.background;
+    self.view.backgroundColor = backgroundColor;
+
+    UINavigationBar *navBar = self.navigationController.navigationBar;
+    _searchController = [[UISearchController alloc] initWithSearchResultsController:nil];
+    _searchController.searchResultsUpdater = self;
+    _searchController.delegate = self;
+    _searchController.obscuresBackgroundDuringPresentation = NO;
+
+    _searchController.searchBar.delegate = self;
+    _searchController.searchBar.barTintColor = navBar.barTintColor;
+    _searchController.searchBar.tintColor = navBar.tintColor;
+    _searchController.searchBar.translucent = navBar.translucent;
+    _searchController.searchBar.opaque = navBar.opaque;
+    [_searchController.searchBar sizeToFit];
+
+    if (@available(iOS 26.0, visionOS 26.0, *)) {
+        _searchController.searchBar.searchBarStyle = UISearchBarStyleMinimal;
+        self.navigationItem.preferredSearchBarPlacement = UINavigationItemSearchBarPlacementIntegrated;
+    } else {
+        UITextField *searchTextField = [_searchController.searchBar valueForKey:@"searchField"];
+        UIView *backgroundView = searchTextField.subviews.firstObject;
+        backgroundView.backgroundColor = backgroundColor;
+        backgroundView.layer.cornerRadius = 10;
+        backgroundView.clipsToBounds = YES;
+    }
+
+    self.navigationItem.hidesSearchBarWhenScrolling = YES;
+    self.navigationItem.searchController = _searchController;
+    self.definesPresentationContext = YES;
+
+    [self addPlayAllAction];
+
+    _searchData = [[NSMutableArray alloc] init];
+    [_searchData removeAllObjects];
+
+    NSNotificationCenter *notificationCenter = [NSNotificationCenter defaultCenter];
+    [notificationCenter addObserver:self
+                           selector:@selector(adjustForKeyboard:)
+                               name:UIKeyboardWillChangeFrameNotification
+                             object:nil];
+    [notificationCenter addObserver:self
+                           selector:@selector(adjustForKeyboard:)
+                               name:UIKeyboardWillHideNotification
+                             object:nil];
+    [notificationCenter addObserver:self
+                           selector:@selector(updateBottomInsets)
+                               name:VLCPlayerDisplayControllerDisplayMiniPlayer
+                             object:nil];
+    [notificationCenter addObserver:self
+                           selector:@selector(updateBottomInsets)
+                               name:VLCPlayerDisplayControllerHideMiniPlayer
+                             object:nil];
+}
+
+- (void)updateBottomInsets
+{
+    UIEdgeInsets contentInsets = UIEdgeInsetsZero;
+    contentInsets.bottom = [self baseBottomInset];
+
+    self.tableView.contentInset = contentInsets;
+    self.tableView.verticalScrollIndicatorInsets = contentInsets;
+}
+
+- (CGFloat)baseBottomInset
+{
+    CGFloat inset = 0.;
+
+    // ensure that the last row is not cut-off on iPad by the tab bar
+    if (self.traitCollection.userInterfaceIdiom == UIUserInterfaceIdiomPad && self.tabBarController) {
+        inset += self.tabBarController.tabBar.frame.size.height;
+    }
+
+    if (VLCPlaybackService.sharedInstance.playerDisplayController.isMiniPlayerVisible) {
+        inset += VLCAudioMiniPlayer.height;
+    }
+
+    return inset;
+}
+
+- (void)adjustForKeyboard:(NSNotification *)aNotification
+{
+    if (!self.viewIfLoaded.window) {
+        return;
+    }
+
+    [self.tableView adjustBottomInsetForKeyboardNotification:aNotification baseInset:[self baseBottomInset]];
+}
+
+- (void)viewWillAppear:(BOOL)animated
+{
+    [super viewWillAppear:animated];
+
+    [self updateBottomInsets];
+}
+
+- (void)viewWillDisappear:(BOOL)animated
+{
+    [super viewWillDisappear:animated];
+    if (self.isEditing)
+        [self setEditing:NO animated:YES];
+}
+
+- (UITableViewStyle)tableViewStyle
+{
+    return UITableViewStylePlain;
+}
+
+- (IBAction)playAllAction:(id)sender
+{
+    // to be implemented by subclass
+}
+
+- (void)startActivityIndicator
+{
+    [_coneLoadingView startAnimating];
+}
+
+- (void)stopActivityIndicator
+{
+    [_coneLoadingView stopAnimating];
+}
+
+- (void)addPlayAllAction
+{
+    self.navigationItem.rightBarButtonItems = @[[UIBarButtonItem themedPlayAllButtonWithTarget:self andSelector:@selector(playAllAction:)]];
+}
+
+- (void)removePlayAllAction
+{
+    self.navigationItem.rightBarButtonItems = @[];
+}
+
+#pragma mark - Table view data source
+
+- (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView
+{
+    return 1;
+}
+
+- (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section
+{
+    return 0;
+}
+
+- (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath
+{
+    return nil;
+}
+
+#pragma mark - Table view delegate
+
+- (void)tableView:(UITableView *)tableView willDisplayCell:(VLCNetworkListCell *)cell forRowAtIndexPath:(NSIndexPath *)indexPath
+{
+    if ([indexPath row] == ((NSIndexPath *)[[tableView indexPathsForVisibleRows] lastObject]).row)
+        [_coneLoadingView stopAnimating];
+}
+
+#pragma mark - Search Controller Delegate
+
+- (void)willPresentSearchController:(UISearchController *)searchController
+{
+    if ([[UIDevice currentDevice] userInterfaceIdiom] == UIUserInterfaceIdiomPad)
+        _tableView.rowHeight = 80.0f;
+    else
+        _tableView.rowHeight = 68.0f;
+
+    _tableView.backgroundColor = PresentationTheme.current.colors.background;
+}
+
+#pragma mark - Search Research Updater
+
+- (void)updateSearchResultsForSearchController:(UISearchController *)searchController
+{
+}
+
+@end

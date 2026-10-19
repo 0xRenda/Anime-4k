@@ -1,0 +1,251 @@
+$(function(){
+    function escapeTags(string) {
+        return string
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;")
+            .replace(/'/g, "&#039;");
+    }
+
+    $(document).bind('drop dragover', function (e) {
+        e.preventDefault();
+    });
+    $(document).bind('dragover', function () {
+        $('.main').addClass('drop');
+    });
+    $(document).bind('dragexit dragleave dragend drop', function () {
+        $('.main').removeClass('drop');
+    });
+
+    var fileupload = $('#fileupload').fileupload({
+        dataType: 'json',
+        url: 'upload.json',
+        dropZone: $(document),
+        pasteZone: $(document),
+        add: add
+    });
+
+    fileupload.bind('fileuploaddone', done);
+    fileupload.bind('fileuploadfail', fail);
+    fileupload.bind('fileuploadprogress', progress);
+
+    $(window).bind('beforeunload', function (e) {
+        if (Object.keys(xhrCache).length) {
+            var confirmationMessage = 'There are transfers in progress, navigating away will abort them.';
+            (e || window.event).returnValue = confirmationMessage;     // Gecko + IE
+            return confirmationMessage;                                // Webkit, Safari, Chrome etc.
+        }
+    });
+
+    var xhrCache = {};
+    var xhrNb = 0;
+    function add (e, data) {
+        $('.message').hide();
+        var xhr = data.submit();
+        $.each(data.files, function(index, file){
+            file._ID = xhrNb++;
+            xhrCache[file._ID] = xhr;
+            var hasProgressbar = ('FormData' in window);
+            var html = '<li data-file-id="' + file._ID + '">';
+            html += '<div class="filename">' + escapeTags(file.name) + '</div>';
+            html += '<div class="progress"><div class="bar" style="width: 0%">0%</div>';
+            if (!hasProgressbar) { html += '<span class="dots"></span>'; }
+            html += '</div>';
+            if (hasProgressbar) { html += '<div class="stop"></div>'; }
+            html += '</li>';
+
+            var tmpl = $(html);
+            if (!hasProgressbar) {
+                var progress = tmpl.find('.progress');
+                var bar = progress.find('.bar');
+                var dots = progress.find('.dots');
+
+                function doting() {
+                    if (bar.css('width') != '0px') { return; }
+
+                    if (dots.text().length == 3) {
+                        dots.text('');
+                    }
+                    else {
+                        dots.text(dots.text() + '.');
+                    }
+                    setTimeout(doting, 750);
+                }
+                setTimeout(doting, 10);
+            }
+            $('.uploads ul').append(tmpl);
+        });
+    }
+
+    function done (e, data) {
+        $.each(data.files, function (index, file) {
+            delete xhrCache[file._ID];
+            $('li[data-file-id=' + file._ID + ']').addClass('done').text(file.name  + ' - 100%');
+        });
+    }
+
+    function progress (e, data) {
+        var prog = Math.ceil(data.loaded / data.total * 100) + '%';
+        $.each(data.files, function (index, file) {
+            $('li[data-file-id=' + file._ID + '] .progress .bar').css('width', prog).text(prog);
+        });
+    }
+
+    function fail (e, data) {
+        console.log('File transfer failed', data.errorThrown, data.textStatus);
+        $.each(data.files, function (index, file) {
+            delete xhrCache[file._ID];
+            $('li[data-file-id=' + file._ID + ']').addClass('fail').text(file.name  + ' - fail');
+        });
+    }
+
+    $('.uploads').delegate('.stop', 'click', stopTransfer);
+
+    function stopTransfer (e) {
+        var li = $(e.currentTarget).parent('li');
+        var id = li.data('file-id');
+        xhrCache[id].abort();
+        delete xhrCache[id];
+        li.addClass('fail');
+    }
+
+    $('a.folder').click(function(event) {
+        if (isSelectMode) return;
+        $('#overlay').addClass('shown');
+        $('#modal ul.downloads').empty();
+        $(this).parent().find('.content > div').clone().appendTo('#modal ul.downloads');
+    });
+
+    $('#overlay').click(function(event) {
+        $(this).toggleClass('shown');
+    });
+
+    /* Bulk & Toolbar Download Logic */
+    var DOWNLOAD_DELAY_MS = 300;
+    var isSelectMode = false;
+
+    function getDownloadableUrls(container) {
+        var urls = [];
+        container.find('a.inner[href^="download/"]').each(function() {
+            var href = $(this).attr('href');
+            if (href && href !== '#') {
+                urls.push(href);
+            }
+        });
+        return urls;
+    }
+
+    function triggerSequentialDownloads(urls) {
+        if (!urls || urls.length === 0) return;
+        urls.forEach(function(url, index) {
+            setTimeout(function() {
+                var link = document.createElement('a');
+                link.href = url;
+                link.download = '';
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            }, index * DOWNLOAD_DELAY_MS);
+        });
+    }
+
+    function updateToolbarState() {
+        var totalDownloadableFiles = getDownloadableUrls($('.downloads')).length;
+        $('.download-all-btn').prop('disabled', totalDownloadableFiles === 0);
+
+        var selectedCount = $('.downloads > div.selected').length;
+        var bulkBtn = $('.bulk-download-btn');
+        var selectedTemplate = bulkBtn.attr('data-label-download-selected') || 'Download Selected (%@)';
+        bulkBtn.text(selectedTemplate.replace('%@', selectedCount).replace('%s', selectedCount));
+        bulkBtn.prop('disabled', selectedCount === 0);
+
+        var selectBtn = $('.select-toggle-btn');
+        var selectText = selectBtn.attr('data-label-select') || 'Select';
+        var cancelText = selectBtn.attr('data-label-cancel') || 'Cancel';
+
+        if (isSelectMode) {
+            selectBtn.addClass('active').text(cancelText);
+            $('.downloads').addClass('selectable-mode');
+            bulkBtn.removeClass('hidden');
+        } else {
+            selectBtn.removeClass('active').text(selectText);
+            $('.downloads').removeClass('selectable-mode');
+            $('.downloads > div').removeClass('selected');
+            bulkBtn.addClass('hidden');
+        }
+    }
+
+    $('.select-toggle-btn').click(function() {
+        isSelectMode = !isSelectMode;
+        updateToolbarState();
+    });
+
+    $('.download-all-btn').click(function() {
+        var allUrls = getDownloadableUrls($('.downloads'));
+        triggerSequentialDownloads(allUrls);
+    });
+
+    $('.bulk-download-btn').click(function() {
+        if (!isSelectMode) return;
+        var selectedUrls = getDownloadableUrls($('.downloads > div.selected'));
+        triggerSequentialDownloads(selectedUrls);
+    });
+
+    $('.downloads').on('click', '> div', function(e) {
+        if (!isSelectMode) {
+            return;
+        }
+
+        e.preventDefault();
+        e.stopPropagation();
+
+        $(this).toggleClass('selected');
+        updateToolbarState();
+    });
+
+    // Initialize toolbar button states on page load
+    updateToolbarState();
+
+
+
+    $('form.open-url').on('submit', function(e) {
+        e.preventDefault();
+        var url = $(this).find('input').val().trim();
+        var localesURL = (typeof LOCALES !== 'undefined' && LOCALES.PLAYER_CONTROL) ? LOCALES.PLAYER_CONTROL.URL : {};
+        if (!url) {
+            return displayMessage(localesURL.EMPTY);
+        } else if (!isURL(url)) {
+            return displayMessage(localesURL.NOT_VALID);
+        }
+        displayMessage(localesURL.SENT_SUCCESSFULLY);
+        var socket = new WebSocket('ws://' + location.host);
+        socket.onopen = function() {
+            socket.send(JSON.stringify({ type: 'openURL', url: url }));
+            socket.close();
+        };
+        $(this).find('input').val('');
+    });
+
+    function isURL(str) {
+        var p = /^(rtp|rtsp|https?):\/\/@?[a-zA-Z0-9.\-]+(?:\:\d+)?(?:\/[^\s]*)?$/i;
+        return p.test(str);
+    }
+
+    var TIMEOUT = null;
+    var DELAY = 5000;
+    function displayMessage(message) {
+        if (!message) {
+            return;
+        }
+        $('.display-message').addClass('show');
+        $('.display-message').text(message);
+        if (TIMEOUT) {
+            clearTimeout(TIMEOUT);
+        }
+        TIMEOUT = setTimeout(function() {
+            $('.display-message').removeClass('show');
+        }, DELAY);
+    }
+
+});

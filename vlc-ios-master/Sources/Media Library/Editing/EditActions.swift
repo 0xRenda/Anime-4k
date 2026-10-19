@@ -1,0 +1,674 @@
+/*****************************************************************************
+ * EditActions.swift
+ *
+ * Copyright © 2019-2026 VLC authors and VideoLAN
+ *
+ * Authors: Edgar Fouillet <vlc # edgar.fouillet.eu>
+ *          Felix Paul Kühne <fkuehne # videolan.org>
+ *
+ * Refer to the COPYING file of the official project for license.
+ *****************************************************************************/
+
+enum completionState {
+    case inProgress
+    case success
+    case fail
+}
+
+class EditActions {
+    private let rootViewController: UIViewController
+    private let model: MediaLibraryBaseModel
+    private let mediaLibraryService: MediaLibraryService
+    private var completion: ((completionState) -> Void)?
+    var objects = [VLCMLObject]()
+
+    private lazy var actionStatusLabel: VLCStatusLabel = {
+        var label = VLCStatusLabel()
+        label.textColor = .white
+        label.translatesAutoresizingMaskIntoConstraints = false
+        label.isHidden = true
+        return label
+    }()
+
+    init(model: MediaLibraryBaseModel, mediaLibraryService: MediaLibraryService) {
+        self.rootViewController = (UIApplication.shared.delegate?.window??.rootViewController!)!
+        self.model = model
+        self.mediaLibraryService = mediaLibraryService
+        updateActionStatusLabelPresentingView()
+    }
+}
+
+// MARK: - Main edit actions
+
+extension EditActions {
+    private func addToCollection(_ collection: [MediaCollectionModel], for type: MediaCollectionModel.Type) {
+        let addToCollectionViewController = AddToCollectionViewController()
+        addToCollectionViewController.delegate = self
+        addToCollectionViewController.mlCollection = collection
+        addToCollectionViewController.updateInterface(for: type)
+        let navigationController = UINavigationController(rootViewController: addToCollectionViewController)
+        rootViewController.present(navigationController, animated: true, completion: nil)
+    }
+
+    func addToPlaylist(_ completion: ((completionState) -> Void)? = nil) {
+        self.completion = completion
+        ParentalControlCoordinator.shared.authorizeIfParentalControlIsEnabled(action: {
+            DispatchQueue.main.async {
+                if !self.mediaLibraryService.playlists().isEmpty {
+                    self.addToCollection(self.mediaLibraryService.playlists(), for: VLCMLPlaylist.self)
+                } else {
+                    self.addToNewPlaylist()
+                }
+            }
+        }, fail: {
+            self.completion?(.fail)
+        })
+    }
+
+    func addToMediaGroup(_ completion: ((completionState) -> Void)? = nil) {
+        self.completion = completion
+
+        ParentalControlCoordinator.shared.authorizeIfParentalControlIsEnabled(action: {
+            DispatchQueue.main.async {
+                var mediaGroupIds = [VLCMLIdentifier]()
+                self.objects.forEach { mediaGroupIds.append($0.identifier()) }
+
+                guard var mediaGroups = self.mediaLibraryService.medialib.mediaGroups() else {
+                    assertionFailure("EditActions: addToMediaGroup: Failed to retrieve mediaGroups.")
+                    self.completion?(.fail)
+                    return
+                }
+
+                // Filter out visible groups and action originated source media groups
+                mediaGroups = mediaGroups.filter {
+                    if mediaGroupIds.contains($0.identifier()) {
+                        // Do not include the current selection
+                        return false
+                    } else if $0.nbTotalMedia() == 1 && !$0.userInteracted() {
+                        // Do not include elements shown as a media
+                        return false
+                    }
+                    return true
+                }
+
+                self.addToCollection(mediaGroups, for: VLCMLMediaGroup.self)
+            }
+        }, fail: {
+            self.completion?(.fail)
+        })
+    }
+
+    func removeFromMediaGroup(_ completion: ((completionState) -> Void)? = nil) {
+        self.completion = completion
+        guard !objects.isEmpty else {
+            completion?(.fail)
+            return
+        }
+
+        guard let media = objects as? [VLCMLMedia] else {
+            assertionFailure("EditActions: removeFromMediaGroup: Unknown type inside media group.")
+            completion?(.fail)
+            return
+        }
+
+        guard let collectionModel = model as? CollectionModel else {
+            assertionFailure("EditActions: removeFromMediaGroup: Unknown model type for media groups.")
+            completion?(.fail)
+            return
+        }
+
+        ParentalControlCoordinator.shared.authorizeIfParentalControlIsEnabled(action: {
+            DispatchQueue.main.async {
+                if let mediaGroup = collectionModel.mediaCollection as? VLCMLMediaGroup,
+                   mediaGroup.nbTotalMedia() == media.count {
+                    guard mediaGroup.destroy() else {
+                        assertionFailure("EditActions: removeFromMediaGroup: Failed to destroy mediaGroup.")
+                        self.completion?(.fail)
+                        return
+                    }
+                } else {
+                    media.forEach { $0.removeFromGroup() }
+                }
+                collectionModel.filterFilesFromDeletion(of: media)
+                self.completion?(.success)
+            }
+        }, fail: {
+            self.completion?(.fail)
+        })
+    }
+
+    func rename(_ completion: ((completionState) -> Void)? = nil) {
+        self.completion = completion
+        if !objects.isEmpty {
+            let mlObject = objects.first
+            guard let mlObjectName = getObjectTitle(for: mlObject) else {
+                VLCAlertViewController.alertViewManager(title: NSLocalizedString("ERROR_RENAME_FAILED", comment: ""),
+                                                        errorMessage: NSLocalizedString("ERROR_RENAME_FAILED", comment: ""),
+                                                        viewController: self.rootViewController)
+                self.completion?(.fail)
+                return
+            }
+
+            // Not using VLCAlertViewController to have more customization in text fields
+            let alertInfo = TextFieldAlertInfo(alertTitle: String(format: NSLocalizedString("RENAME_MEDIA_TO", comment: ""), mlObjectName),
+                                               placeHolder: getObjectPlaceholder(for: mlObject),
+                                               textfieldText: mlObjectName,
+                                               confirmActionTitle: NSLocalizedString("BUTTON_RENAME", comment: ""))
+            presentTextFieldAlert(with: alertInfo, completionHandler: {
+                [unowned self] text -> Void in
+                guard text != "" else {
+                    VLCAlertViewController.alertViewManager(title: NSLocalizedString("ERROR_RENAME_FAILED", comment: ""),
+                                                            errorMessage: NSLocalizedString("ERROR_EMPTY_NAME", comment: ""),
+                                                            viewController: self.rootViewController)
+                    self.completion?(.fail)
+                    return
+                }
+                ParentalControlCoordinator.shared.authorizeIfParentalControlIsEnabled(action: {
+                    if let media = mlObject as? VLCMLMedia {
+                        media.updateTitle(text)
+                    } else if let playlist = mlObject as? VLCMLPlaylist {
+                        playlist.updateName(text)
+                    } else if let mediaGroup = mlObject as? VLCMLMediaGroup,
+                              let mediaGroupViewModel = self.model as? MediaGroupViewModel {
+                        mediaGroupViewModel.rename(mediaGroup, to: text)
+                    }
+                    self.objects.removeFirst()
+                    self.completion?(.inProgress)
+                    self.rename(completion)
+                }, fail: {
+                    self.completion?(.fail)
+                })
+            })
+        } else {
+            self.completion?(.success)
+        }
+    }
+
+    func delete(_ completion: ((completionState) -> Void)? = nil) {
+        let mediaTitle = getObjectTitle(for: objects.first) ?? ""
+        self.completion = completion
+        var title = String(format: NSLocalizedString("DELETE_SINGLE_TITLE", comment: ""), mediaTitle)
+        if objects.count != 1 {
+            title = String(format: NSLocalizedString("DELETE_MULTIPLE_TITLE", comment: ""), mediaTitle, objects.count-1)
+        }
+        var message: String
+        if model is PlaylistModel {
+            if objects.count > 1 {
+                message = NSLocalizedString("DELETE_MESSAGE_PLAYLISTS", comment: "")
+            } else {
+                message = NSLocalizedString("DELETE_MESSAGE_PLAYLIST", comment: "")
+            }
+        } else if (model as? CollectionModel)?.mediaCollection is VLCMLPlaylist {
+            message = NSLocalizedString("DELETE_MESSAGE_PLAYLIST_CONTENT", comment: "")
+        } else if let folderModel = model as? FolderModel,
+                  objects.compactMap({ $0 as? VLCMLFolder }).contains(where: folderModel.isExternalFolder) {
+            message = NSLocalizedString("DELETE_MESSAGE_EXTERNAL_FOLDER", comment: "")
+        } else if objects.contains(where: { $0 is VLCMLFolder }) {
+            message = NSLocalizedString("DELETE_MESSAGE_FOLDER", comment: "")
+        } else if model is HistoryModel {
+            message = NSLocalizedString("DELETE_MESSAGE_HISTORY", comment: "")
+        } else {
+            message = NSLocalizedString("DELETE_MESSAGE", comment: "")
+        }
+
+        let cancelButton = VLCAlertButton(title: NSLocalizedString("BUTTON_CANCEL", comment: ""),
+                                          style: .cancel)
+        let deleteButton = VLCAlertButton(title: NSLocalizedString("BUTTON_DELETE", comment: ""),
+                                          style: .destructive,
+                                          action: { [unowned self] action in
+            ParentalControlCoordinator.shared.authorizeIfParentalControlIsEnabled(
+                action: {
+                    if let model = self.model as? FolderModel {
+                        let folders = self.objects.compactMap({ $0 as? VLCMLFolder })
+                        let media = self.objects.compactMap({ $0 as? VLCMLMedia })
+                        if !media.isEmpty {
+                            model.delete(media: media)
+                        }
+                        if !folders.isEmpty {
+                            model.delete(folders)
+                        }
+                        self.objects.removeAll()
+                    } else {
+                        self.model.anyDelete(self.objects)
+                        self.objects.removeAll()
+                    }
+                    self.completion?(.success)
+                },
+                fail: {
+                    self.completion?(.fail)
+                }
+            )
+        })
+
+        VLCAlertViewController.alertViewManager(title: title,
+                                                errorMessage: message,
+                                                viewController: rootViewController,
+                                                buttonsAction: [cancelButton,
+                                                                deleteButton])
+    }
+
+    func markAsSeen(_ completion: ((completionState) -> Void)? = nil) {
+        for media in objects.compactMap({ $0 as? VLCMLMedia }) {
+            if media.playCount() == 0 {
+                media.setPlayCount(1)
+            }
+            media.isNew = false
+        }
+        completion?(.success)
+    }
+
+    func markAsUnseen(_ completion: ((completionState) -> Void)? = nil) {
+        for media in objects.compactMap({ $0 as? VLCMLMedia }) {
+            media.removeFromHistory()
+            media.isNew = true
+        }
+        completion?(.success)
+    }
+
+    func share(origin: UIView, _ completion: ((completionState) -> Void)? = nil) {
+        self.completion = completion
+#if os(iOS)
+        UIApplication.shared.beginIgnoringInteractionEvents()
+#endif
+
+        let urls = URLs()
+        guard let controller = VLCActivityViewControllerVendor.activityViewController(forFiles: urls,
+                                                                                      presenting: nil,
+                                                                                      presenting: rootViewController,
+                                                                                      completionHandler: { [unowned self] _ in
+            for url in urls where url.path.hasPrefix(NSTemporaryDirectory()) {
+                try? FileManager.default.removeItem(at: url)
+            }
+            self.completion?(.success)
+        }
+        ) else {
+#if os(iOS)
+            UIApplication.shared.endIgnoringInteractionEvents()
+#endif
+            self.completion?(.fail)
+            return
+        }
+        controller.popoverPresentationController?.sourceView = origin
+        controller.popoverPresentationController?.permittedArrowDirections = .any
+        controller.popoverPresentationController?.sourceRect = origin.bounds
+        rootViewController.present(controller, animated: true) {
+#if os(iOS)
+            UIApplication.shared.endIgnoringInteractionEvents()
+#endif
+        }
+    }
+}
+
+// MARK: - Private helpers
+
+private extension EditActions {
+    private struct TextFieldAlertInfo {
+        var alertTitle: String
+        var alertDescription: String
+        var placeHolder: String
+        var textfieldText: String
+        var confirmActionTitle: String
+
+        init(alertTitle: String = "",
+             alertDescription: String = "",
+             placeHolder: String = "",
+             textfieldText: String = "",
+             confirmActionTitle: String = NSLocalizedString("BUTTON_DONE", comment: "")) {
+            self.alertTitle = alertTitle
+            self.alertDescription = alertDescription
+            self.placeHolder = placeHolder
+            self.textfieldText = textfieldText
+            self.confirmActionTitle = confirmActionTitle
+        }
+    }
+
+    private func getObjectTitle(for mlObject: VLCMLObject?) -> String? {
+        guard let mlObject = mlObject else {
+            return nil
+        }
+        if let media = mlObject as? VLCMLMedia {
+            return media.title
+        } else if let playlist = mlObject as? VLCMLPlaylist {
+            return playlist.name
+        } else if let mediaGroup = mlObject as? VLCMLMediaGroup {
+            if mediaGroup.nbTotalMedia() == 1 && !mediaGroup.userInteracted() {
+                guard let media = mediaGroup.media(of: .video)?.first else {
+                    assertionFailure("EditActions: rename/delete Failed to retrieve media.")
+                    return nil
+                }
+                return media.title
+            }
+            else {
+                return mediaGroup.name()
+            }
+        } else if let artist = mlObject as? VLCMLArtist {
+            return artist.artistName()
+        } else if let album = mlObject as? VLCMLAlbum {
+            return album.albumName()
+        } else if let genre = mlObject as? VLCMLGenre {
+            return genre.title()
+        } else if let folder = mlObject as? VLCMLFolder {
+            return folder.displayName
+        } else {
+            assertionFailure("EditActions: Rename/Delete called with wrong model.")
+            return nil
+        }
+    }
+
+    private func getObjectPlaceholder(for mlObject: VLCMLObject?) -> String {
+        if mlObject is VLCMLPlaylist {
+            return NSLocalizedString("PLAYLIST_PLACEHOLDER", comment: "")
+        } else if let mediaGroup = mlObject as? VLCMLMediaGroup,
+                  mediaGroup.nbTotalMedia() > 1 || mediaGroup.userInteracted() {
+            return NSLocalizedString("MEDIA_GROUPS_PLACEHOLDER", comment: "")
+        }
+
+        return NSLocalizedString("MEDIA_PLACEHOLDER", comment: "")
+    }
+
+    private func presentTextFieldAlert(with info: TextFieldAlertInfo,
+                                       completionHandler: @escaping (String) -> Void) {
+        let alertController = UIAlertController(title: info.alertTitle,
+                                                message: info.alertDescription,
+                                                preferredStyle: .alert)
+
+        let cancelButton = UIAlertAction(title: NSLocalizedString("BUTTON_CANCEL", comment: ""),
+                                         style: .cancel)
+
+
+        let confirmAction = UIAlertAction(title: info.confirmActionTitle, style: .default) {
+            [weak alertController] _ in
+            guard let alertController = alertController,
+                  let textField = alertController.textFields?.first else { return }
+            completionHandler(textField.text ?? "")
+        }
+        confirmAction.isEnabled = !info.textfieldText.isEmpty
+
+        alertController.addTextField(configurationHandler: {
+            textField in
+            textField.text = info.textfieldText
+            textField.placeholder = info.placeHolder
+            textField.addAction(UIAction { action in
+                confirmAction.isEnabled = !((action.sender as? UITextField)?.text ?? "").isEmpty
+            }, for: .editingChanged)
+        })
+
+        alertController.addAction(cancelButton)
+        alertController.addAction(confirmAction)
+
+        rootViewController.present(alertController, animated: true, completion: nil)
+    }
+
+    private func URLs() -> [URL] {
+        var fileURLs = [URL]()
+
+        for object in objects {
+            if let media = object as? VLCMLMedia {
+                if let mrl = media.mainFile()?.mrl {
+                    fileURLs.append(mrl)
+                }
+            } else if let playlist = object as? VLCMLPlaylist {
+                if let url = exportURL(for: playlist) {
+                    fileURLs.append(url)
+                }
+            } else if let mediaCollection = object as? MediaCollectionModel {
+                if let files = mediaCollection.files() {
+                    for media in files {
+                        if let mrl = media.mainFile()?.mrl {
+                            fileURLs.append(mrl)
+                        }
+                    }
+                }
+            }
+        }
+        return fileURLs
+    }
+
+    private func exportURL(for playlist: VLCMLPlaylist) -> URL? {
+        if playlist.isReadOnly {
+            return playlist.mrl
+        }
+
+        let mediaList = VLCMediaList()
+        for mlMedia in playlist.media ?? [] {
+            guard let mrl = mlMedia.mainFile()?.mrl, let media = VLCMedia(url: mrl) else {
+                continue
+            }
+            media.metaData.title = mlMedia.title
+            mediaList.add(media)
+        }
+
+        let documentsURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first
+        let illegalCharacters = CharacterSet(charactersIn: "/:").union(.controlCharacters)
+        var fileName = playlist.name.components(separatedBy: illegalCharacters).joined(separator: " ")
+        if fileName.isEmpty {
+            fileName = NSLocalizedString("PLAYLIST", comment: "")
+        }
+        let tempURL = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent(fileName)
+            .appendingPathExtension("m3u")
+        try? FileManager.default.removeItem(at: tempURL)
+
+        do {
+            try mediaList.writeM3U(to: tempURL, relativeToDirectory: documentsURL)
+        } catch {
+            return nil
+        }
+
+        return tempURL
+    }
+
+    // MARK: Media Groups
+
+    private func createMediaGroup(with name: String) {
+        var media = [VLCMLMedia]()
+        var mediaGroupIds = [VLCMLIdentifier]()
+
+        objects.forEach() {
+            if let mediaGroup = $0 as? VLCMLMediaGroup {
+                media += mediaGroup.media(of: .video) ?? []
+                mediaGroupIds.append(mediaGroup.identifier())
+            } else if let medium = $0 as? VLCMLMedia {
+                media.append(medium)
+            } else {
+                assertionFailure("EditActions: createMediaGroup: Unknown type.")
+            }
+        }
+
+        if let mediaGroupModel = model as? MediaGroupViewModel {
+            if !mediaGroupModel.create(with: name, from: mediaGroupIds, content: media) {
+                completion?(.fail)
+                return
+            }
+        }
+        completion?(.success)
+    }
+
+    // MARK: Playlist
+
+    private func addToNewPlaylist() {
+        let alertInfo = TextFieldAlertInfo(alertTitle: NSLocalizedString("PLAYLISTS", comment: ""),
+                                           alertDescription: NSLocalizedString("PLAYLIST_DESCRIPTION",
+                                                                               comment: ""),
+                                           placeHolder: NSLocalizedString("PLAYLIST_PLACEHOLDER",
+                                                                          comment: ""))
+        presentTextFieldAlert(with: alertInfo) {
+            [unowned self] text -> Void in
+            guard text != "" else {
+                DispatchQueue.main.async {
+                    VLCAlertViewController.alertViewManager(title: NSLocalizedString("ERROR_EMPTY_NAME",
+                                                                                     comment: ""),
+                                                            viewController: self.rootViewController)
+                }
+                return
+            }
+            self.createPlaylist(text)
+        }
+    }
+
+    private func createPlaylist(_ name: String) {
+        guard let playlist = mediaLibraryService.createPlaylist(with: name) else {
+            assertionFailure("EditActions: createPlaylist: Failed to create a playlist.")
+            DispatchQueue.main.async {
+                VLCAlertViewController.alertViewManager(title: NSLocalizedString("ERROR_PLAYLIST_CREATION",
+                                                                                 comment: ""),
+                                                        viewController: self.rootViewController)
+            }
+            completion?(.fail)
+            return
+        }
+
+        for media in objects {
+            if !playlist.appendMedia(withIdentifier: media.identifier()) {
+                assertionFailure("EditActions: createPlaylist: Failed to add item.")
+            }
+        }
+        let message = String(format: NSLocalizedString("ADD_TO_PLAYLIST_STATUS_MESSAGE", comment: ""), objects.count, name)
+        actionStatusLabel.showStatusMessage(message)
+        completion?(.success)
+    }
+
+    private func showAddDuplicatedMediaAlert(collectionVC: AddToCollectionViewController, with existedMedia: [VLCMLMedia], to playlist: VLCMLPlaylist, numOfDuplicated: Int, numOfNonDuplicated: Int) {
+        let addAction: (UIAlertAction) -> Void = { _ in
+            existedMedia.forEach { media in
+                playlist.appendMedia(media)
+            }
+            collectionVC.reloadData()
+            collectionVC.dismiss(animated: true)
+            self.updateActionStatusLabelPresentingView()
+            self.showAddSuccessLabel(numOfMedia: numOfDuplicated, title: playlist.title())
+        }
+
+        let addTitle = String(format: NSLocalizedString("BUTTON_CONTINUE", comment: ""))
+        let addAlertButton = VLCAlertButton(title: addTitle, style: .default, action: addAction)
+
+        let cancelTitle = String(format: NSLocalizedString("BUTTON_CANCEL", comment: ""))
+        let cancelAlertButton = VLCAlertButton(title: cancelTitle, style: .destructive, action: nil)
+        let alertTitle = String(format: NSLocalizedString("ADD_ALERT_TITLE", comment: ""))
+        let alertMessage: String
+        if numOfDuplicated == 1 {
+            alertMessage = String(format: NSLocalizedString("ADD_ALERT_MESSAGE_SINGLE", comment: ""), playlist.title())
+        } else {
+            alertMessage = String(format: NSLocalizedString("ADD_ALERT_MESSAGE_MULTIPLE", comment: ""), numOfDuplicated, playlist.title())
+        }
+
+        guard let presentedViewController = self.rootViewController.presentedViewController else {
+            return
+        }
+
+        VLCAlertViewController.alertViewManager(title: alertTitle, errorMessage: alertMessage,
+                                                viewController: presentedViewController,
+                                                buttonsAction: [cancelAlertButton, addAlertButton])
+    }
+
+    private func showAddSuccessLabel(numOfMedia: Int, title: String) {
+        let message = String(format: NSLocalizedString("ADD_TO_PLAYLIST_STATUS_MESSAGE", comment: ""), numOfMedia, title)
+        actionStatusLabel.showStatusMessage(message)
+    }
+
+    private func updateActionStatusLabelPresentingView(with view: UIViewController? = nil) {
+        self.actionStatusLabel.removeFromSuperview()
+        let presentedView = view ?? self.rootViewController
+        presentedView.view.addSubview(actionStatusLabel)
+        presentedView.view.bringSubviewToFront(actionStatusLabel)
+        NSLayoutConstraint.activate([
+            actionStatusLabel.centerXAnchor.constraint(equalTo: presentedView.view.centerXAnchor),
+            actionStatusLabel.centerYAnchor.constraint(equalTo: presentedView.view.bottomAnchor, constant: -110)
+        ])
+    }
+}
+
+// MARK: - AddToCollectionViewControllerDelegate
+
+extension EditActions: AddToCollectionViewControllerDelegate {
+    func addToCollectionViewController(_ addToCollectionViewController: AddToCollectionViewController,
+                                       didSelectCollection collection: MediaCollectionModel) {
+        var tmpMedia = [VLCMLMedia]()
+        var nonDuplicatedMediaCount = 0
+        var duplicatedMedia = 0
+        if let mediaGroups = objects as? [VLCMLMediaGroup] {
+            mediaGroups.forEach() { tmpMedia += $0.media(of: .video) ?? [] }
+        } else if let media = objects as? [VLCMLMedia] {
+            tmpMedia = media
+        } else {
+            assertionFailure("EditActions: AddToCollectionViewControllerDelegate: Failed to retrieve type.")
+            addToCollectionViewController.dismiss(animated: true, completion: nil)
+            completion?(.fail)
+            return
+        }
+
+        if let mediaGroup = collection as? VLCMLMediaGroup,
+           let mediaGroupModel = self.model as? MediaGroupViewModel {
+            mediaGroupModel.append(tmpMedia, to: mediaGroup)
+            addToCollectionViewController.dismiss(animated: true, completion: nil)
+        } else if let playlist = collection as? VLCMLPlaylist {
+            var existedMedia = [VLCMLMedia]()
+            for medium in tmpMedia {
+                let existed = playlist.media?.contains(where: {$0.identifier() == medium.identifier()}) ?? false
+                if existed {
+                    existedMedia.append(medium)
+                    duplicatedMedia += 1
+                    continue
+                }
+                nonDuplicatedMediaCount += 1
+                if !playlist.appendMedia(withIdentifier: medium.identifier()) {
+                    assertionFailure("EditActions: AddToPlaylistViewControllerDelegate: Failed to add item.")
+                    completion?(.fail)
+                }
+            }
+            addToCollectionViewController.reloadData()
+            if duplicatedMedia > 0 {
+                updateActionStatusLabelPresentingView(with: self.rootViewController.presentedViewController)
+                showAddDuplicatedMediaAlert(collectionVC: addToCollectionViewController,
+                                            with: existedMedia, to: playlist, numOfDuplicated: duplicatedMedia,
+                                            numOfNonDuplicated: nonDuplicatedMediaCount)
+                nonDuplicatedMediaCount > 0 ? showAddSuccessLabel(numOfMedia: nonDuplicatedMediaCount, title: playlist.title()) : ()
+            } else if nonDuplicatedMediaCount > 0 {
+                addToCollectionViewController.dismiss(animated: true, completion: nil)
+                updateActionStatusLabelPresentingView()
+                showAddSuccessLabel(numOfMedia: nonDuplicatedMediaCount, title: playlist.title())
+            }
+        }
+        completion?(.success)
+    }
+
+    func addToCollectionViewController(_ addToCollectionViewController: AddToCollectionViewController,
+                                       newCollectionName name: String,
+                                       from mlType: MediaCollectionModel.Type) {
+        if mlType is VLCMLPlaylist.Type {
+            createPlaylist(name)
+        } else if mlType is VLCMLMediaGroup.Type {
+            createMediaGroup(with: name)
+        }
+        addToCollectionViewController.dismiss(animated: true, completion: nil)
+    }
+
+    func addToCollectionViewControllerMoveCollections(_
+                                                      addToCollectionViewController: AddToCollectionViewController) {
+        guard let mediaGroups = objects as? [VLCMLMediaGroup] else {
+            assertionFailure("EditActions: Cannot move out if not VLCMLMediaGroups.")
+            completion?(.fail)
+            return
+        }
+
+        guard let mediaGroupViewModel = model as? MediaGroupViewModel else {
+            assertionFailure("EditActions: Cannot move out if not MediaGroupViewModel.")
+            completion?(.fail)
+            return
+        }
+
+        var mediaGroupsIds = [VLCMLIdentifier]()
+
+        mediaGroups.forEach() {
+            // Skip mediaGroups that are shown as media
+            if $0.userInteracted() || $0.nbTotalMedia() > 1 {
+                mediaGroupsIds.append($0.identifier())
+                $0.destroy()
+            }
+        }
+        mediaGroupViewModel.filterFilesFromDeletion(of: mediaGroupsIds)
+        addToCollectionViewController.dismiss(animated: true, completion: nil)
+        completion?(.success)
+    }
+}
+

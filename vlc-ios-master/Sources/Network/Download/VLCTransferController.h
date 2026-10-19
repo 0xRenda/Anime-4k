@@ -1,0 +1,72 @@
+/*****************************************************************************
+ * VLCTransferController.h
+ * VLC for iOS
+ *****************************************************************************
+ * Copyright (c) 2013-2022 VideoLAN. All rights reserved.
+ * $Id$
+ *
+ * Authors: Felix Paul Kühne <fkuehne # videolan.org>
+ *          Gleb Pinigin <gpinigin # gmail.com>
+ *          Pierre Sagaspe <pierre.sagaspe # me.com>
+ *
+ * Refer to the COPYING file of the official project for license.
+ *****************************************************************************/
+
+#import <Foundation/Foundation.h>
+#import "VLCTransferItem.h"
+NS_ASSUME_NONNULL_BEGIN
+
+extern NSString * const VLCTransferControllerStateDidChangeNotification;
+
+@class VLCMedia;
+@class WCSessionFileTransfer;
+
+@protocol VLCExternalDownloadCanceller <NSObject>
+
+- (void)cancelExternalDownloadWithToken:(NSUInteger)token;
+
+@end
+
+@interface VLCTransferController : NSObject
+
+#pragma mark - Download source
+- (void)addVLCMediaToDownloadList:(VLCMedia *)media fileNameOfMedia:(nullable NSString *)fileName;
+- (void)cancelCurrentDownload;
+
+#pragma mark - Upload source (called by the Wi-Fi sharing HTTP server)
+- (NSUInteger)startUploadWithExpectedSize:(long long)expectedSize;
+- (void)updateUpload:(NSUInteger)token displayName:(NSString *)name;
+- (void)updateUpload:(NSUInteger)token receivedBytes:(long long)received;
+- (void)finishUpload:(NSUInteger)token filePath:(nullable NSString *)filePath;
+- (void)failUpload:(NSUInteger)token errorDescription:(nullable NSString *)description;
+- (void)cancelUpload:(NSUInteger)token;
+
+#pragma mark - External download source (caller-driven, e.g. subscription caching)
+// The caller performs the download itself and reports state by token, so the
+// item appears in the Transfers list. The canceller is asked to stop the
+// transfer; the item stays listed until the caller reports the outcome.
+- (NSUInteger)startExternalDownloadWithName:(NSString *)name
+                                  canceller:(nullable id<VLCExternalDownloadCanceller>)canceller;
+- (void)updateExternalDownload:(NSUInteger)token receivedBytes:(long long)received expectedBytes:(long long)expected;
+- (void)finishExternalDownload:(NSUInteger)token filePath:(nullable NSString *)filePath;
+- (void)failExternalDownload:(NSUInteger)token errorDescription:(nullable NSString *)description;
+- (void)cancelExternalDownload:(NSUInteger)token;
+
+#if (TARGET_OS_IOS || TARGET_OS_WATCH) && !NO_WATCH
+#pragma mark - watchOS source
+- (void)observeOutstandingWatchTransfers;
+- (void)finishWatchTransfer:(WCSessionFileTransfer *)fileTransfer filePath:(NSString *)filePath;
+- (void)failWatchTransfer:(WCSessionFileTransfer *)fileTransfer errorDescription:(NSString *)description;
+#endif
+
+#pragma mark - List state (view-controller-facing)
+@property (readonly) NSArray<VLCTransferItem *> *inProgressItems;
+@property (readonly) NSArray<VLCTransferItem *> *completedItems;
+@property (readonly) NSArray<VLCTransferItem *> *failedItems;
+
+- (void)cancelInProgressItem:(VLCTransferItem *)item;
+- (void)removeFailedItem:(VLCTransferItem *)item;
+
+@end
+
+NS_ASSUME_NONNULL_END

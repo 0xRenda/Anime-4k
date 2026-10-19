@@ -1,0 +1,17 @@
+.reference/
+.build/
+build/
+.bundle/
+vendor/bundle/
+__pycache__/
+*.pyc
+*.ipa
+*.xcarchive/
+*.metallib
+*.air
+*.p12
+*.mobileprovision
+*.keychain-db
+vlc-ios-master/Pods/
+vlc-ios-master/SourcePackages/
+**/xcuserdata/

@@ -1,0 +1,1427 @@
+/*****************************************************************************
+ * MediaLibraryService.swift
+ * VLC for iOS
+ *****************************************************************************
+ * Copyright © 2018-2026 VideoLAN. All rights reserved.
+ * Copyright © 2018-2026 Videolabs
+ *
+ * Authors: Soomin Lee <bubu # mikan.io>
+ *          Felix Paul Kühne <fkuehne # videolan.org>
+ *
+ * Refer to the COPYING file of the official project for license.
+ *****************************************************************************/
+
+#if !os(watchOS)
+import CoreSpotlight
+#endif
+
+#if os(watchOS)
+import WatchKit
+#endif
+
+import VLCMediaLibraryKit
+import UIKit
+
+// MARK: - Notification names
+
+extension Notification.Name {
+    static let VLCNewFileAddedNotification = Notification.Name("NewFileAddedNotification")
+}
+
+// For objc
+extension NSNotification {
+    @objc static let VLCNewFileAddedNotification = Notification.Name.VLCNewFileAddedNotification
+}
+
+// MARK: -
+
+@objc protocol MediaLibraryObserver: AnyObject {
+    // Video
+    @objc optional func medialibrary(_ medialibrary: MediaLibraryService,
+                                     didAddVideos videos: [VLCMLMedia])
+
+    @objc optional func medialibrary(_ medialibrary: MediaLibraryService,
+                                     didModifyVideos videos: [VLCMLMedia])
+
+    @objc optional func medialibrary(_ medialibrary: MediaLibraryService,
+                                     didDeleteMediaWithIds ids: [NSNumber])
+
+    // ShowEpisodes
+    @objc optional func medialibrary(_ medialibrary: MediaLibraryService,
+                                     didAddShowEpisodes showEpisodes: [VLCMLMedia])
+
+    // Thumbnail
+    @objc optional func medialibrary(_ medialibrary: MediaLibraryService,
+                                     thumbnailReady media: VLCMLMedia,
+                                     type: VLCMLThumbnailSizeType, success: Bool)
+
+    // Tracks
+    @objc optional func medialibrary(_ medialibrary: MediaLibraryService,
+                                     didAddTracks tracks: [VLCMLMedia])
+
+    @objc optional func medialibrary(_ medialibrary: MediaLibraryService,
+                                     didModifyTracks tracks: [VLCMLMedia])
+
+    // Artists
+    @objc optional func medialibrary(_ medialibrary: MediaLibraryService,
+                                     didAddArtists artists: [VLCMLArtist])
+
+    @objc optional func medialibrary(_ medialibrary: MediaLibraryService,
+                                     didModifyArtistsWithIds artistsIds: [NSNumber])
+
+    @objc optional func medialibrary(_ medialibrary: MediaLibraryService,
+                                     didDeleteArtistsWithIds artistsIds: [NSNumber])
+
+    // Albums
+    @objc optional func medialibrary(_ medialibrary: MediaLibraryService,
+                                     didAddAlbums albums: [VLCMLAlbum])
+
+    @objc optional func medialibrary(_ medialibrary: MediaLibraryService,
+                                     didModifyAlbumsWithIds albumsIds: [NSNumber])
+
+    @objc optional func medialibrary(_ medialibrary: MediaLibraryService,
+                                     didDeleteAlbumsWithIds albumsIds: [NSNumber])
+
+    // AlbumTracks
+    @objc optional func medialibrary(_ medialibrary: MediaLibraryService,
+                                     didAddAlbumTracks albumTracks: [VLCMLMedia])
+
+    // Genres
+    @objc optional func medialibrary(_ medialibrary: MediaLibraryService,
+                                     didAddGenres genres: [VLCMLGenre])
+
+    @objc optional func medialibrary(_ medialibrary: MediaLibraryService,
+                                     didModifyGenresWithIds genresIds: [NSNumber])
+
+    @objc optional func medialibrary(_ medialibrary: MediaLibraryService,
+                                     didDeleteGenresWithIds genresIds: [NSNumber])
+
+    // Playlist
+    @objc optional func medialibrary(_ medialibrary: MediaLibraryService,
+                                     didAddPlaylists playlists: [VLCMLPlaylist])
+
+    @objc optional func medialibrary(_ medialibrary: MediaLibraryService,
+                                     didModifyPlaylistsWithIds playlistsIds: [NSNumber])
+
+    @objc optional func medialibrary(_ medialibrary: MediaLibraryService,
+                                     didDeletePlaylistsWithIds playlistsIds: [NSNumber])
+
+    // MediaGroups
+    @objc optional func medialibrary(_ medialibrary: MediaLibraryService,
+                                     didAddMediaGroups mediaGroups: [VLCMLMediaGroup])
+
+    @objc optional func medialibrary(_ medialibrary: MediaLibraryService,
+                                     didModifyMediaGroupsWithIds mediaGroupsIds: [NSNumber])
+
+    @objc optional func medialibrary(_ medialibrary: MediaLibraryService,
+                                     didDeleteMediaGroupsWithIds mediaGroupsIds: [NSNumber])
+
+    // Subscriptions
+    @objc optional func medialibrary(_ medialibrary: MediaLibraryService,
+                                     didAddSubscriptions subscriptions: [VLCMLSubscription])
+
+    @objc optional func medialibrary(_ medialibrary: MediaLibraryService,
+                                     didModifySubscriptionsWithIds subscriptionIds: [NSNumber])
+
+    @objc optional func medialibrary(_ medialibrary: MediaLibraryService,
+                                     didDeleteSubscriptionsWithIds subscriptionIds: [NSNumber])
+
+    @objc optional func medialibrary(_ medialibrary: MediaLibraryService,
+                                     didReceiveNewMediaForSubscriptionsWithIds subscriptionIds: [NSNumber])
+
+    @objc optional func medialibrary(_ medialibrary: MediaLibraryService,
+                                     didUpdateCacheForSubscriptionWithId subscriptionId: VLCMLIdentifier)
+
+    @objc optional func medialibrary(_ medialibrary: MediaLibraryService,
+                                     artworkReadyForSubscriptionWithId subscriptionId: VLCMLIdentifier,
+                                     success: Bool)
+
+    @objc optional func medialibrary(_ medialibrary: MediaLibraryService,
+                                     cacheIdleChanged idle: Bool)
+
+    @objc optional func medialibrary(_ medialibrary: MediaLibraryService,
+                                     backgroundTasksIdleChanged idle: Bool)
+
+    @objc optional func medialibrary(_ medialibrary: MediaLibraryService,
+                                     didStartCachingMediaWithId mediaId: VLCMLIdentifier,
+                                     operation: VLCMLCacheOperation)
+
+    @objc optional func medialibrary(_ medialibrary: MediaLibraryService,
+                                     didFinishCachingMediaWithId mediaId: VLCMLIdentifier,
+                                     operation: VLCMLCacheOperation,
+                                     status: VLCMLCacheStatus)
+
+    // History
+    @objc optional func medialibrary(_ medialibrary: MediaLibraryService,
+                                     historyChangedOfType type: VLCMLHistoryType)
+
+    // Entry points
+    @objc optional func medialibrary(_ medialibrary: MediaLibraryService,
+                                     didAddEntryPoint entryPoint: String)
+
+    @objc optional func medialibrary(_ medialibrary: MediaLibraryService,
+                                     didRemoveEntryPoint entryPoint: String)
+
+    @objc optional func medialibraryDidUpdateExternalFolders(_ medialibrary: MediaLibraryService)
+
+    // Force Rescan
+    @objc optional func medialibraryDidStartRescan()
+}
+
+// MARK: - Delegate for "Backup Media Library" setting
+
+@objc protocol MediaLibraryDeviceBackupDelegate: AnyObject {
+    @objc func medialibraryDidStartExclusion()
+
+    @objc func medialibraryDidCompleteExclusion()
+}
+
+// MARK: - Delegate for hiding Media Library
+
+@objc protocol MediaLibraryHidingDelegate: AnyObject {
+    @objc func medialibraryDidStartHiding()
+
+    @objc func medialibraryDidCompleteHiding()
+}
+
+// MARK: -
+
+class MediaLibraryService: NSObject {
+
+    private var mlServiceType: MLServiceType
+
+    @objc enum MLServiceType: Int {
+        case mediaLibrary, snapshotLibrary
+
+        var databaseName: String {
+            switch self {
+            case .mediaLibrary:
+                return kVLCMediaLibraryDBFileName
+            case .snapshotLibrary:
+                return kVLCSnapshotMediaLibraryDBFileName
+            }
+        }
+    }
+
+    private static let didForceRescan: String = "MediaLibraryDidForceRescan"
+    private var initRecoveryAttempt = 0
+    private var currentDatabasePath = ""
+    private var currentMediaPath = ""
+
+    private var didStartMediaDiscovery = false
+
+    private var desiredThumbnailWidth = UInt(320)
+    private var desiredThumbnailHeight = UInt(200)
+
+    private(set) var observable = VLCObservable<MediaLibraryObserver>()
+
+    private static let medialibraryLogLimit = 200
+    private let medialibraryLogLock = NSLock()
+    private var medialibraryLog: [String] = []
+
+    private let mediaLibrarySetupLock = NSLock()
+    private var didSetupMediaLibrary = false
+    private lazy var privateMediaLib = VLCMediaLibrary()
+
+    /// the shared parser has a single delegate, so the restoration playlist needs to be told apart
+    /// from everything else queued on it, network browsing in particular
+    private var lastPlayedMediaList: VLCMedia?
+    private var lastPlayedMediaListOpenInMiniPlayer = true
+    private var lastPlayedMediaListFallback: (() -> Void)?
+    private var didRequestLastPlayedMediaListRestore = false
+    private var didRestoreLastPlayedMediaListOnDemand = false
+
+#if !os(watchOS)
+    let subscriptionCacher = VLCSubscriptionCacher()
+    private let artworkCacher = VLCArtworkCacher()
+#endif
+
+    @objc var medialib: VLCMediaLibrary {
+        ensureMediaLibrarySetup()
+        return privateMediaLib
+    }
+
+    /// deliberately unlocked, so that callers can tell whether reading from the library would bring
+    /// it up without waiting on that bring-up themselves
+    @objc var isMediaLibrarySetup: Bool {
+        return didSetupMediaLibrary
+    }
+
+    private func ensureMediaLibrarySetup() {
+        mediaLibrarySetupLock.lock()
+        defer { mediaLibrarySetupLock.unlock() }
+        guard !didSetupMediaLibrary else { return }
+        didSetupMediaLibrary = true
+        setupMediaLibrary()
+    }
+
+    @objc weak var deviceBackupDelegate: MediaLibraryDeviceBackupDelegate?
+    @objc weak var hidingDelegate: MediaLibraryHidingDelegate?
+
+    @objc var isExcludingFromBackup: Bool = false
+    @objc var isHidingLibrary: Bool = false
+
+#if !os(tvOS) && !os(watchOS)
+    var currentlyPlayingCollection: CurrentlyPlayingCollectionModel?
+#endif
+
+    @objc
+    init(libraryType: MLServiceType = .mediaLibrary) {
+        self.mlServiceType = libraryType
+        super.init()
+
+        if libraryType == .mediaLibrary {
+            NotificationCenter.default.addObserver(self, selector: #selector(reload),
+                                                   name: .VLCNewFileAddedNotification, object: nil)
+
+            #if !os(watchOS)
+            NotificationCenter.default.addObserver(self, selector: #selector(handleWillEnterForegroundNotification),
+                                                   name: UIApplication.willEnterForegroundNotification, object: nil)
+            #endif
+
+            #if os(iOS)
+            MediaLibraryCorruptionReportPresenter.shared.presentIfNeeded()
+            #endif
+        }
+
+        #if os(tvOS) || os(watchOS)
+        #if os(watchOS)
+        let referenceWidth: CGFloat = WKInterfaceDevice.current().screenBounds.size.width
+        #else
+        let referenceWidth: CGFloat = UIScreen.main.bounds.width
+        #endif
+        let thumbnailSize = referenceWidth * 0.6
+        desiredThumbnailWidth = UInt(thumbnailSize)
+        desiredThumbnailHeight = UInt(thumbnailSize / 1.2)
+        #else
+        let displayScale: CGFloat = UITraitCollection.current.displayScale
+        let scaledCellWidth = MediaLibraryService.desiredCellWidth * displayScale
+        desiredThumbnailWidth = UInt(scaledCellWidth)
+        desiredThumbnailHeight = UInt(scaledCellWidth / 1.6)
+        #endif
+
+        VLCMediaParser.shared().delegate = self
+    }
+
+#if !os(tvOS) && !os(watchOS)
+    private static var desiredCellWidth: CGFloat {
+        if #available(iOS 26.0, visionOS 1.0, *) {
+            return widestCellWidth
+        }
+
+#if os(visionOS)
+        return widestCellWidth
+#else
+        let screenBounds = UIScreen.main.bounds
+        let portraitWidth = min(screenBounds.width, screenBounds.height)
+        return MovieCollectionViewCell.cellSizeForWidth(portraitWidth, safeAreaInsets: .zero).width
+#endif
+    }
+
+    private static var widestCellWidth: CGFloat {
+        let layoutWidths: [CGFloat] = [DeviceDimensions.iPhone16ProMaxPortrait.rawValue,
+                                       DeviceDimensions.iPhoneLandscape.rawValue,
+                                       DeviceDimensions.iPadLandscape.rawValue]
+        let cellWidths = layoutWidths.map {
+            MovieCollectionViewCell.cellSizeForWidth($0, safeAreaInsets: .zero).width
+        }
+        return cellWidths.max() ?? DeviceDimensions.iPhone4sPortrait.rawValue
+    }
+#endif
+}
+
+// MARK: - Private initializers
+
+private extension MediaLibraryService {
+    private func removeMedialibraryCachedArtifacts(thumbnailPath: String,
+                                                    medialibraryPath: String) {
+        let artifactPaths = [
+            thumbnailPath,
+            medialibraryPath
+        ]
+
+        for artifactPath in artifactPaths where FileManager.default.fileExists(atPath: artifactPath) {
+            do {
+                try FileManager.default.removeItem(atPath: artifactPath)
+            } catch let error as NSError {
+                APLog("MediaLibraryService: Failed to remove artifact at \(artifactPath): \(error.localizedDescription)")
+            }
+        }
+    }
+
+    private func removeMedialibraryDatabaseFiles(databasePath: String) {
+        let dbPaths = [
+            databasePath,
+            databasePath + "-shm",
+            databasePath + "-wal",
+            databasePath + "-journal"
+        ]
+
+        for dbPath in dbPaths where FileManager.default.fileExists(atPath: dbPath) {
+            do {
+                try FileManager.default.removeItem(atPath: dbPath)
+            } catch let error as NSError {
+                APLog("MediaLibraryService: Failed to remove database file at \(dbPath): \(error.localizedDescription)")
+            }
+        }
+    }
+
+    private func setupMediaDiscovery(at path: String) {
+        guard didStartMediaDiscovery == false else {
+            return
+        }
+        didStartMediaDiscovery = true
+
+        let mediaFileDiscoverer = VLCMediaFileDiscoverer.sharedInstance()
+        mediaFileDiscoverer?.directoryPath = path
+        mediaFileDiscoverer?.addObserver(self)
+        mediaFileDiscoverer?.startDiscovering()
+    }
+
+    private func banLogsFolder() {
+#if os(tvOS)
+        let searchPaths = NSSearchPathForDirectoriesInDomains(.cachesDirectory, .userDomainMask, true)
+#else
+        let searchPaths = NSSearchPathForDirectoriesInDomains(.documentDirectory, .userDomainMask, true)
+#endif
+        guard let basePath = searchPaths.first else {
+            return
+        }
+
+        privateMediaLib.banFolder(withPath: "file://" + basePath + "/Logs")
+    }
+
+    private func startMediaLibrary(on path: String) {
+        let includeMediaLibrary = UserDefaults.standard.bool(forKey: kVLCSettingBackupMediaLibrary)
+        includeInDeviceBackup(includeMediaLibrary)
+
+        let hideML = UserDefaults.standard.bool(forKey: kVLCSettingHideLibraryInFilesApp)
+        hideMediaLibrary(hideML)
+
+        if UserDefaults.standard.bool(forKey: MediaLibraryService.didForceRescan) == false {
+            privateMediaLib.forceRescan()
+            UserDefaults.standard.set(true, forKey: MediaLibraryService.didForceRescan)
+        }
+
+        if VLCMigrationCursor.isStepPending(.banLogsFolder) {
+            banLogsFolder()
+            VLCMigrationCursor.complete(.banLogsFolder)
+        }
+
+        FileManager.default.createFile(atPath: "\(path)/\(NSLocalizedString("MEDIALIBRARY_FILES_PLACEHOLDER", comment: ""))", contents: nil, attributes: nil)
+        try? FileManager.default.removeItem(atPath: "\(path)/\(NSLocalizedString("MEDIALIBRARY_ADDING_PLACEHOLDER", comment: ""))")
+
+        privateMediaLib.reload()
+        privateMediaLib.discover(onEntryPoint: "file://" + path)
+    }
+
+    private func setupMediaLibrary() {
+        var libraryPath: String
+        var mediaPath: String
+
+#if os(tvOS)
+        guard let libraryDirectory = NSSearchPathForDirectoriesInDomains(.cachesDirectory, .userDomainMask, true).first,
+              let cachePath = NSSearchPathForDirectoriesInDomains(.cachesDirectory, .userDomainMask, true).first else {
+            preconditionFailure("MediaLibraryService: Unable to init medialibrary.")
+        }
+        mediaPath = cachePath + "/" + kVLCHTTPUploadDirectory
+#else
+        guard let libraryDirectory = NSSearchPathForDirectoriesInDomains(.libraryDirectory, .userDomainMask, true).first,
+              let documentPath = NSSearchPathForDirectoriesInDomains(.documentDirectory, .userDomainMask, true).first else {
+            preconditionFailure("MediaLibraryService: Unable to init medialibrary.")
+        }
+        mediaPath = documentPath
+#endif
+
+        libraryPath = libraryDirectory
+
+        guard let cachesDirectory = NSSearchPathForDirectoriesInDomains(.cachesDirectory, .userDomainMask, true).first else {
+            preconditionFailure("MediaLibraryService: Unable to init medialibrary.")
+        }
+
+        let databasePath: String
+        let thumbnailPath: String
+        let medialibraryPath: String
+        let mediaCachePath: String
+
+        switch mlServiceType {
+        case .mediaLibrary:
+            databasePath = libraryPath + "/MediaLibrary/" + MLServiceType.mediaLibrary.databaseName
+            thumbnailPath = libraryPath + "/MediaLibrary/Thumbnails"
+            medialibraryPath = libraryPath + "/MediaLibrary/Internal"
+            mediaCachePath = cachesDirectory + "/MediaLibrary/Cache"
+        case .snapshotLibrary:
+            databasePath = libraryPath + "/MediaLibrarySnapshot/" + MLServiceType.snapshotLibrary.databaseName
+            thumbnailPath = libraryPath + "/MediaLibrarySnapshot/Thumbnails"
+            medialibraryPath = libraryPath + "/MediaLibrarySnapshot/Internal"
+            mediaCachePath = cachesDirectory + "/MediaLibrarySnapshot/Cache"
+        }
+
+        currentDatabasePath = databasePath
+        currentMediaPath = mediaPath
+
+#if os(tvOS)
+        // we need to create the folder before we can listen to it
+        do {
+            try FileManager.default.createDirectory(atPath: mediaPath,
+                                                    withIntermediateDirectories: true)
+        } catch let error as NSError {
+            assertionFailure("Failed to create directory: \(error.localizedDescription)")
+        }
+#endif
+        if mlServiceType == .mediaLibrary {
+            setupMediaDiscovery(at: mediaPath)
+        }
+
+        _ = try? FileManager.default.removeItem(atPath: thumbnailPath)
+
+        do {
+            try FileManager.default.createDirectory(atPath: medialibraryPath,
+                                                    withIntermediateDirectories: true)
+        } catch let error as NSError {
+            assertionFailure("Failed to create directory: \(error.localizedDescription)")
+        }
+
+        privateMediaLib.loggerDelegate = self
+        let medialibraryStatus = privateMediaLib.setupMediaLibrary(databasePath: databasePath,
+                                                               medialibraryPath: medialibraryPath,
+                                                               cachePath: mediaCachePath)
+
+        privateMediaLib.delegate = self
+#if !os(watchOS)
+        privateMediaLib.cacherDelegate = subscriptionCacher
+        privateMediaLib.artworkCacherDelegate = artworkCacher
+#endif
+
+        switch medialibraryStatus {
+        case .success, .dbReset:
+            if mlServiceType == .mediaLibrary {
+                startMediaLibrary(on: mediaPath)
+            }
+        case .alreadyInitialized:
+            assertionFailure("MediaLibraryService: Medialibrary already initialized.")
+        case .failed:
+            if initRecoveryAttempt == 0 {
+                initRecoveryAttempt = 1
+                APLog("MediaLibraryService: Failed to setup medialibrary, retrying with cleared caches (preserving database and journal files for SQLite auto-recovery).")
+                removeMedialibraryCachedArtifacts(thumbnailPath: thumbnailPath,
+                                                  medialibraryPath: medialibraryPath)
+                privateMediaLib = VLCMediaLibrary()
+                setupMediaLibrary()
+                return
+            } else if initRecoveryAttempt == 1 {
+                initRecoveryAttempt = 2
+                APLog("MediaLibraryService: Retry with journal recovery failed, clearing all database files.")
+#if os(iOS)
+                preserveCorruptedDatabase(reason: .setupFailed, details: nil)
+#endif
+                removeMedialibraryCachedArtifacts(thumbnailPath: thumbnailPath,
+                                                  medialibraryPath: medialibraryPath)
+                removeMedialibraryDatabaseFiles(databasePath: databasePath)
+                privateMediaLib = VLCMediaLibrary()
+                setupMediaLibrary()
+                return
+            }
+            APLog("MediaLibraryService: Permanently failed to setup medialibrary after recovery attempts.")
+            assertionFailure("MediaLibraryService: Permanently failed to setup medialibrary.")
+        case .dbCorrupted:
+            guard initRecoveryAttempt < 2 else {
+                APLog("MediaLibraryService: Permanently failed to setup medialibrary after recovery attempts.")
+                assertionFailure("MediaLibraryService: Permanently failed to setup medialibrary.")
+                return
+            }
+            initRecoveryAttempt = 2
+            APLog("MediaLibraryService: Database corrupted, clearing all database files.")
+#if os(iOS)
+            preserveCorruptedDatabase(reason: .databaseCorrupted, details: nil)
+#endif
+            removeMedialibraryCachedArtifacts(thumbnailPath: thumbnailPath,
+                                              medialibraryPath: medialibraryPath)
+            removeMedialibraryDatabaseFiles(databasePath: databasePath)
+            privateMediaLib = VLCMediaLibrary()
+            setupMediaLibrary()
+        case .dbMigrationFailed:
+#if os(iOS)
+            preserveCorruptedDatabase(reason: .migrationFailed, details: nil)
+#endif
+            privateMediaLib.clearDatabase(restorePlaylists: true)
+            if mlServiceType == .mediaLibrary {
+                startMediaLibrary(on: mediaPath)
+            }
+        case .dbSchemaMismatch:
+#if os(iOS)
+            preserveCorruptedDatabase(reason: .schemaMismatch, details: nil)
+#endif
+            privateMediaLib.clearDatabase(restorePlaylists: true)
+            if mlServiceType == .mediaLibrary {
+                startMediaLibrary(on: mediaPath)
+            }
+        case .dbForeignKeyViolation:
+#if os(iOS)
+            preserveCorruptedDatabase(reason: .foreignKeyViolation, details: nil)
+#endif
+            privateMediaLib.clearDatabase(restorePlaylists: true)
+            if mlServiceType == .mediaLibrary {
+                startMediaLibrary(on: mediaPath)
+            }
+        case .dbBusy:
+            APLog("MediaLibraryService: Database is locked by another connection.")
+            assertionFailure("MediaLibraryService: Database is locked by another connection.")
+        @unknown default:
+            assertionFailure("MediaLibraryService: unhandled case")
+        }
+    }
+
+#if os(iOS)
+    private func preserveCorruptedDatabase(reason: MediaLibraryCorruptionReason, details: String?) {
+        guard mlServiceType == .mediaLibrary, !currentDatabasePath.isEmpty else {
+            return
+        }
+
+        medialibraryLogLock.lock()
+        let log = medialibraryLog
+        medialibraryLogLock.unlock()
+
+        MediaLibraryCorruptionReport.preserve(databasePath: currentDatabasePath,
+                                              reason: reason,
+                                              details: details,
+                                              log: log)
+        MediaLibraryCorruptionReportPresenter.shared.presentIfNeeded()
+    }
+#endif
+}
+
+// MARK: - Helpers
+
+@objc extension MediaLibraryService {
+    @objc func reload() {
+        medialib.reload()
+    }
+
+    @objc func forceRescan() {
+        medialib.forceRescan()
+    }
+    #if !os(tvOS)
+    @objc func reindexAllMediaForSpotlight() {
+        #if !os(watchOS)
+        CSSearchableIndex.default().deleteAllSearchableItems { _ in
+            self.media(ofType: .video).forEach { $0.updateCoreSpotlightEntry() }
+            self.media(ofType: .audio).forEach { $0.updateCoreSpotlightEntry() }
+        }
+        #endif
+    }
+    #endif
+    /// Returns number of *ALL* files(audio and video) present in the medialibrary database
+    func numberOfFiles() -> Int {
+        return (medialib.audioFiles()?.count ?? 0) + (medialib.videoFiles()?.count ?? 0)
+    }
+
+    /// Returns *ALL* file found for a specified VLCMLMediaType
+    ///
+    /// - Parameter type: Type of the media
+    /// - Returns: Array of VLCMLMedia
+    @objc func media(ofType type: VLCMLMediaType,
+                     sortingCriteria sort: VLCMLSortingCriteria = .alpha,
+                     desc: Bool = false) -> [VLCMLMedia] {
+        return type == .video ? medialib.videoFiles(with: sort, desc: desc) ?? []
+                              : medialib.audioFiles(with: sort, desc: desc) ?? []
+    }
+
+    func media(ofType type: VLCMLMediaType,
+               sortingCriteria sort: VLCMLSortingCriteria = .alpha,
+               desc: Bool = false, items: UInt32, offset: UInt32) -> [VLCMLMedia] {
+        return type == .video ? medialib.videoFiles(with: sort, desc: desc, items, offset) ?? []
+        : medialib.audioFiles(with: sort, desc: desc, items: items, offset: offset) ?? []
+    }
+
+    @objc func fetchMedia(with mrl: URL?) -> VLCMLMedia? {
+        guard let mrl = mrl  else {
+            return nil //Happens when we have a URL or there is no currently playing file
+        }
+        if let media = medialib.media(withMrl: mrl) {
+            return media
+        }
+#if !os(watchOS)
+        if mrl.isFileURL {
+            let cachedIdentifier = subscriptionCacher.mediaIdentifier(forCachePath: mrl.path)
+            if cachedIdentifier != 0 {
+                return media(for: cachedIdentifier)
+            }
+        }
+#endif
+        return nil
+    }
+
+    @objc func fetchOrCreateMedia(with mrl: URL?) -> VLCMLMedia? {
+        guard let mrl = mrl else {
+            return nil
+        }
+        return medialib.media(withMrl: mrl) ?? addUnknownMedia(with: mrl)
+    }
+
+    private func addUnknownMedia(with mrl: URL) -> VLCMLMedia? {
+        return mrl.isFileURL ? medialib.addExternalMedia(withMrl: mrl)
+                             : medialib.addStream(withMrl: mrl)
+    }
+
+    @objc func media(for identifier: VLCMLIdentifier) -> VLCMLMedia? {
+        return medialib.media(withIdentifier: identifier)
+    }
+
+    @objc func lastPlayedMedia() -> VLCMLMedia? {
+        return medialib.history(of: .global, 1, 0)?.first
+    }
+
+    // Bridge for Obj-C clients: `observable` is a generic type and not visible from Obj-C.
+    @objc func addObserver(_ observer: MediaLibraryObserver) {
+        observable.addObserver(observer)
+    }
+
+
+    @objc func saveMetaData(of media: VLCMLMedia?, from player: PlaybackService) {
+        guard let mlMedia = media else {
+            return
+        }
+
+        mlMedia.isNew = false
+        mlMedia.progress = player.playbackPosition
+        mlMedia.audioTrackIndex = Int64(player.indexOfCurrentAudioTrack)
+        mlMedia.primarySubtitleTrackIndex = Int64(player.indexOfCurrentPrimaryVideoSubtitleTrack)
+        mlMedia.secondarySubtitleTrackIndex = Int64(player.indexOfCurrentSecondaryVideoSubtitleTrack)
+        mlMedia.chapterIndex = Int64(player.indexOfCurrentChapter)
+        mlMedia.titleIndex = Int64(player.indexOfCurrentTitle)
+        let defaults = UserDefaults.standard
+        if !defaults.bool(forKey: kVLCSettingPlaybackSpeedAppliesToAll) {
+            mlMedia.setMetadataOf(VLCMLMetadataType.speed, intValue: Int64((player.playbackRate * 100).rounded()))
+        }
+        mlMedia.setMetadataOf(VLCMLMetadataType.subtitleDelay, intValue: Int64(player.subtitleDelay))
+        if defaults.bool(forKey: kVLCSettingSaveAudioDelay) {
+            mlMedia.setMetadataOf(VLCMLMetadataType.audioDelay, intValue: Int64(player.audioDelay))
+        }
+
+        if mlMedia.type() != .audio {
+            if let thumbnailURL = mlMedia.thumbnail() {
+                if mlMedia.progress < 0.90 {
+                    mlMedia.removeThumbnail(of: .thumbnail)
+                    VLCThumbnailsCache.invalidateThumbnail(for: thumbnailURL)
+                }
+            }
+            mlMedia.requestThumbnail(of: .thumbnail, desiredWidth: desiredThumbnailWidth,
+                                     desiredHeight: desiredThumbnailHeight, atPosition: player.playbackPosition)
+        }
+    }
+
+    func savePlaybackState(of media: VLCMedia, from player: PlaybackService) {
+        guard let mrl = media.url?.absoluteURL else {
+            // No URL from currently played media
+            return
+        }
+
+        var mlMedia: VLCMLMedia? = medialib.media(withMrl: mrl)
+
+        if mlMedia == nil {
+            // Add media unknown to the medialibrary.
+            mlMedia = addUnknownMedia(with: mrl)
+        }
+        saveMetaData(of: mlMedia, from: player)
+    }
+
+    func includeInDeviceBackup(_ include: Bool) {
+#if !os(tvOS)
+        let exclude = !include
+        if let documentPath = NSSearchPathForDirectoriesInDomains(.documentDirectory, .userDomainMask, true).first {
+            var documentURL = URL(fileURLWithPath: documentPath)
+            isExcludingFromBackup = true
+            deviceBackupDelegate?.medialibraryDidStartExclusion()
+            DispatchQueue.global().async {
+                documentURL.setExcludedFromBackup(exclude, recursive: true, onlyFirstLevel: true) {
+                    self.isExcludingFromBackup = false
+                    self.deviceBackupDelegate?.medialibraryDidCompleteExclusion()
+                }
+            }
+        }
+        if let libraryPath = NSSearchPathForDirectoriesInDomains(.libraryDirectory, .userDomainMask, true).first {
+            var mlURL = URL(fileURLWithPath: libraryPath).appendingPathComponent("MediaLibrary")
+            DispatchQueue.global().async {
+                mlURL.setExcludedFromBackup(exclude, recursive: true, onlyFirstLevel: true)
+            }
+        }
+#endif
+    }
+
+    @objc func hideMediaLibrary(_ hide: Bool) {
+#if os(iOS)
+        if let documentPath = NSSearchPathForDirectoriesInDomains(.documentDirectory, .userDomainMask, true).first {
+            var documentURL = URL(fileURLWithPath: documentPath)
+            isHidingLibrary = true
+            hidingDelegate?.medialibraryDidStartHiding()
+            DispatchQueue.global().async {
+                documentURL.setHidden(hide, recursive: true, onlyFirstLevel: false) {
+                    self.isHidingLibrary = false
+                    self.hidingDelegate?.medialibraryDidCompleteHiding()
+                }
+            }
+        }
+#endif
+    }
+
+    @objc func exportMediaLibrary() {
+        guard let documentPath = NSSearchPathForDirectoriesInDomains(.documentDirectory, .userDomainMask, true).first,
+            let libraryPath = NSSearchPathForDirectoriesInDomains(.libraryDirectory, .userDomainMask, true).first else {
+                preconditionFailure("MediaLibraryService: Unable to find medialibrary.")
+        }
+
+        let databasePath = libraryPath + "/MediaLibrary/" + kVLCMediaLibraryDBFileName
+        let targetPath = documentPath + "/Logs/" + kVLCMediaLibraryDBFileName
+
+        _ = try? FileManager.default.createDirectory(atPath: targetPath,
+                                                     withIntermediateDirectories: true)
+        _ = try? FileManager.default.removeItem(atPath: targetPath)
+        _ = try? FileManager.default.copyItem(atPath: databasePath, toPath: targetPath)
+    }
+}
+
+// MARK: - Last played media list restoration
+
+extension MediaLibraryService {
+    @objc func restoreLastPlayedMediaList() {
+        guard !didRequestLastPlayedMediaListRestore else { return }
+        didRequestLastPlayedMediaListRestore = true
+
+        DispatchQueue.global(qos: .utility).async {
+            // an on-demand restore may have taken over while this was queued, and its play queue
+            // and mini player choice must not be downgraded to the automatic ones
+            guard !self.didRestoreLastPlayedMediaListOnDemand else { return }
+
+            self.restoreLastPlayedMediaList(onDemand: false,
+                                            openInMiniPlayer: true,
+                                            fallback: nil)
+        }
+    }
+
+    /// `fallback` runs on the main queue once it is certain that nothing was restored, parsing included
+    func restoreLastPlayedMediaList(onDemand: Bool,
+                                    openInMiniPlayer: Bool,
+                                    fallback: (() -> Void)?) {
+        didRequestLastPlayedMediaListRestore = true
+        if onDemand {
+            didRestoreLastPlayedMediaListOnDemand = true
+        }
+
+        guard onDemand || UserDefaults.standard.bool(forKey: kVLCRestoreLastPlayedMedia),
+              let appSupportURL = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
+        else {
+            runLastPlayedMediaListFallback(fallback)
+            return
+        }
+
+        let m3uFileName = NSLocalizedString("LAST_PLAYED_MEDIALIST", comment: "").appending(".m3u")
+        let m3uFileURL = appSupportURL.appendingPathComponent(m3uFileName)
+
+        guard FileManager.default.fileExists(atPath: m3uFileURL.path),
+              let media = VLCMedia(url: m3uFileURL)
+        else {
+            runLastPlayedMediaListFallback(fallback)
+            return
+        }
+
+        lastPlayedMediaList = media
+        lastPlayedMediaListOpenInMiniPlayer = openInMiniPlayer
+        lastPlayedMediaListFallback = fallback
+        VLCMediaParser.shared().queue(media)
+    }
+
+    fileprivate func runLastPlayedMediaListFallback(_ fallback: (() -> Void)?) {
+        guard let fallback = fallback else { return }
+        DispatchQueue.main.async(execute: fallback)
+    }
+}
+
+// MARK: - Application notifications
+
+@objc private extension MediaLibraryService {
+    @objc private func handleWillEnterForegroundNotification() {
+        guard let documentPath = NSSearchPathForDirectoriesInDomains(.documentDirectory, .userDomainMask, true).first else {
+            assertionFailure("MediaLibraryService: handleWillEnterForegroundNotification: Failed to retrieve documentPath")
+            return
+        }
+        // On each foreground notification we check if there is a `.Trash` folder which is invisible
+        // for the user that can be created by deleting media from the Files app.
+        // This could lead to disk space issues.
+        // For now since we do not handle restoration, we delete the `.Trash` folder every time.
+        // Run this on a background queue to not block the main thread and have the app killed on launch for taking too long
+        DispatchQueue.global(qos: .userInitiated).async {
+            _ = try? FileManager.default.removeItem(atPath: documentPath + "/.Trash")
+
+#if os(iOS)
+            InboxManager.drainSharedInbox()
+#endif
+
+            DispatchQueue.main.async {
+                // Reload in order to make sure that there is no old artifacts left
+                self.reload()
+            }
+        }
+    }
+}
+
+// MARK: - Audio methods
+
+@objc extension MediaLibraryService {
+    func artists(sortingCriteria sort: VLCMLSortingCriteria = .alpha,
+                 desc: Bool = false, listAll all: Bool = true) -> [VLCMLArtist] {
+        return medialib.artists(with: sort, desc: desc, all: all) ?? []
+    }
+
+    func artists(sortingCriteria sort: VLCMLSortingCriteria = .alpha,
+                 desc: Bool = false, listAll all: Bool = true, items: UInt32, offset: UInt32) -> [VLCMLArtist] {
+        return medialib.artists(with: sort, desc: desc, all: all, items, offset) ?? []
+    }
+
+    func albums(sortingCriteria sort: VLCMLSortingCriteria = .alpha,
+                desc: Bool = false) -> [VLCMLAlbum] {
+        return medialib.albums(with: sort, desc: desc) ?? []
+    }
+
+    func albums(sortingCriteria sort: VLCMLSortingCriteria = .alpha,
+                desc: Bool = false, items: UInt32, offset: UInt32) -> [VLCMLAlbum] {
+        return medialib.albums(with: sort, desc: desc, items, offset) ?? []
+    }
+}
+
+// MARK: - Video methods
+
+extension MediaLibraryService {
+   @objc func requestThumbnail(for media: VLCMLMedia) {
+        switch media.thumbnailStatus() {
+        case .available, .persistentFailure, .crash:
+            return
+        case .missing, .failure:
+            break
+        @unknown default:
+            assertionFailure("MediaLibraryService: requestThumbnail: unknown case.")
+        }
+
+        if !media.requestThumbnail(of: .thumbnail, desiredWidth: desiredThumbnailWidth, desiredHeight: desiredThumbnailHeight, atPosition: 0.03) {
+            assertionFailure("MediaLibraryService: Failed to generate thumbnail for: \(media.identifier())")
+        }
+    }
+
+    func requestThumbnail(for media: [VLCMLMedia]) {
+        media.forEach() {
+            requestThumbnail(for: $0)
+        }
+    }
+}
+
+// MARK: - Media group methods
+
+@objc extension MediaLibraryService {
+    func mediaGroups(sortingCriteria sort: VLCMLSortingCriteria = .alpha,
+                     desc: Bool = false) -> [VLCMLMediaGroup] {
+        return medialib.mediaGroups(with: sort, desc: desc) ?? []
+    }
+}
+
+// MARK: - Playlist methods
+
+@objc extension MediaLibraryService {
+    func createPlaylist(with name: String) -> VLCMLPlaylist? {
+        return medialib.createPlaylist(withName: name)
+    }
+
+    func deletePlaylist(with identifier: VLCMLIdentifier) -> Bool {
+        return medialib.deletePlaylist(withIdentifier: identifier)
+    }
+
+    func playlists(sortingCriteria sort: VLCMLSortingCriteria = .default,
+                   desc: Bool = false) -> [VLCMLPlaylist] {
+        return medialib.playlists(with: sort, desc: desc) ?? []
+    }
+
+    func baseFolder() -> VLCMLFolder? {
+        guard let documentURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else {
+            return nil
+        }
+        return medialib.folder(atMrl: documentURL)
+    }
+}
+
+// MARK: - Genre methods
+
+@objc extension MediaLibraryService {
+    func genres(sortingCriteria sort: VLCMLSortingCriteria = .alpha,
+                desc: Bool = false) -> [VLCMLGenre] {
+        return medialib.genres(with: sort, desc: desc) ?? []
+    }
+}
+
+// MARK: - VLCMediaFileDiscovererDelegate
+extension MediaLibraryService: VLCMediaFileDiscovererDelegate {
+    func mediaFileAdded(_ filePath: String!, loading isLoading: Bool) {
+        guard !isLoading else {
+            return
+        }
+
+        reload()
+    }
+
+    func mediaFileDeleted(_ filePath: String!) {
+        reload()
+    }
+}
+
+// MARK: - VLCMediaLibraryDelegate - Media
+
+extension MediaLibraryService: VLCMediaLibraryDelegate {
+    func medialibrary(_ medialibrary: VLCMediaLibrary, didAddMedia media: [VLCMLMedia]) {
+#if !os(tvOS) && !os(watchOS)
+        media.forEach { $0.updateCoreSpotlightEntry() }
+#endif
+        let videos = media.filter {( $0.type() == .video )}
+        let tracks = media.filter {( $0.type() == .audio )}
+
+        observable.notifyObservers {
+            $0.medialibrary?(self, didAddVideos: videos)
+            $0.medialibrary?(self, didAddTracks: tracks)
+        }
+    }
+
+    func medialibrary(_ medialibrary: VLCMediaLibrary, didModifyMediaWithIds mediaIds: [NSNumber]) {
+        var media = [VLCMLMedia]()
+
+        mediaIds.forEach() {
+            guard let safeMedia = medialib.media(withIdentifier: $0.int64Value) else {
+                return
+            }
+            media.append(safeMedia)
+        }
+#if !os(tvOS) && !os(watchOS)
+        media.forEach { $0.updateCoreSpotlightEntry() }
+#endif
+        let showEpisodes = media.filter {( $0.subtype() == .showEpisode )}
+        let albumTrack = media.filter {( $0.subtype() == .albumTrack )}
+        let videos = media.filter {( $0.type() == .video)}
+        let tracks = media.filter {( $0.type() == .audio)}
+
+        // Shows and albumtracks are known only after when the medialibrary calls didModifyMedia
+        DispatchQueue.main.async {
+            self.observable.notifyObservers {
+                $0.medialibrary?(self, didAddShowEpisodes: showEpisodes)
+                $0.medialibrary?(self, didAddAlbumTracks: albumTrack)
+                $0.medialibrary?(self, didModifyVideos: videos)
+                $0.medialibrary?(self, didModifyTracks: tracks)
+            }
+        }
+    }
+
+    func medialibrary(_ medialibrary: VLCMediaLibrary, didDeleteMediaWithIds mediaIds: [NSNumber]) {
+        var stringIds = [String]()
+        mediaIds.forEach { stringIds.append("\($0)") }
+#if !os(tvOS) && !os(watchOS)
+        CSSearchableIndex.default().deleteSearchableItems(withIdentifiers: stringIds, completionHandler: nil)
+#endif
+        observable.notifyObservers {
+            $0.medialibrary?(self, didDeleteMediaWithIds: mediaIds)
+        }
+    }
+
+    func medialibrary(_ medialibrary: VLCMediaLibrary, thumbnailReadyFor media: VLCMLMedia,
+                      of type: VLCMLThumbnailSizeType, withSuccess success: Bool) {
+        observable.notifyObservers {
+            $0.medialibrary?(self, thumbnailReady: media,
+                             type: type, success: success)
+        }
+    }
+}
+
+// MARK: - VLCMediaLibraryDelegate - Artists
+
+extension MediaLibraryService {
+    func medialibrary(_ medialibrary: VLCMediaLibrary, didAdd artists: [VLCMLArtist]) {
+        observable.notifyObservers {
+            $0.medialibrary?(self, didAddArtists: artists)
+        }
+    }
+
+    func medialibrary(_ medialibrary: VLCMediaLibrary,
+                      didModifyArtistsWithIds artistsIds: [NSNumber]) {
+        observable.notifyObservers {
+            $0.medialibrary?(self, didModifyArtistsWithIds: artistsIds)
+        }
+    }
+
+    func medialibrary(_ medialibrary: VLCMediaLibrary, didDeleteArtistsWithIds artistsIds: [NSNumber]) {
+        observable.notifyObservers {
+            $0.medialibrary?(self, didDeleteArtistsWithIds: artistsIds)
+        }
+    }
+}
+
+// MARK: - VLCMediaLibraryDelegate - Albums
+
+extension MediaLibraryService {
+    func medialibrary(_ medialibrary: VLCMediaLibrary, didAdd albums: [VLCMLAlbum]) {
+        observable.notifyObservers {
+            $0.medialibrary?(self, didAddAlbums: albums)
+        }
+    }
+
+    func medialibrary(_ medialibrary: VLCMediaLibrary,
+                      didModifyAlbumsWithIds albumsIds: [NSNumber]) {
+        observable.notifyObservers {
+            $0.medialibrary?(self, didModifyAlbumsWithIds: albumsIds)
+        }
+    }
+
+    func medialibrary(_ medialibrary: VLCMediaLibrary, didDeleteAlbumsWithIds albumsIds: [NSNumber]) {
+        observable.notifyObservers {
+            $0.medialibrary?(self, didDeleteAlbumsWithIds: albumsIds)
+        }
+    }
+}
+
+// MARK: - VLCMediaLibraryDelegate - Genres
+
+extension MediaLibraryService {
+    func medialibrary(_ medialibrary: VLCMediaLibrary, didAdd genres: [VLCMLGenre]) {
+        observable.notifyObservers {
+            $0.medialibrary?(self, didAddGenres: genres)
+        }
+    }
+
+    func medialibrary(_ medialibrary: VLCMediaLibrary,
+                      didModifyGenresWithIds genresIds: [NSNumber]) {
+        observable.notifyObservers {
+            $0.medialibrary?(self, didModifyGenresWithIds: genresIds)
+        }
+    }
+
+    func medialibrary(_ medialibrary: VLCMediaLibrary,
+                      didDeleteGenresWithIds genresIds: [NSNumber]) {
+        observable.notifyObservers {
+            $0.medialibrary?(self, didDeleteGenresWithIds: genresIds)
+        }
+    }
+}
+
+// MARK: - VLCMediaLibraryDelegate - Playlists
+
+extension MediaLibraryService {
+    func medialibrary(_ medialibrary: VLCMediaLibrary, didAdd playlists: [VLCMLPlaylist]) {
+        observable.notifyObservers {
+            $0.medialibrary?(self, didAddPlaylists: playlists)
+        }
+    }
+
+    func medialibrary(_ medialibrary: VLCMediaLibrary,
+                      didModifyPlaylistsWithIds playlistsIds: [NSNumber]) {
+        observable.notifyObservers {
+            $0.medialibrary?(self, didModifyPlaylistsWithIds: playlistsIds)
+        }
+    }
+
+    func medialibrary(_ medialibrary: VLCMediaLibrary, didDeletePlaylistsWithIds playlistsIds: [NSNumber]) {
+        observable.notifyObservers {
+            $0.medialibrary?(self, didDeletePlaylistsWithIds: playlistsIds)
+        }
+    }
+}
+
+// MARK: - VLCMediaLibraryDelegate - Media groups
+
+extension MediaLibraryService {
+    func medialibrary(_ medialibrary: VLCMediaLibrary, didAdd mediaGroups: [VLCMLMediaGroup]) {
+        observable.notifyObservers {
+            $0.medialibrary?(self, didAddMediaGroups: mediaGroups)
+        }
+    }
+
+    func medialibrary(_ medialibrary: VLCMediaLibrary,
+                      didModifyMediaGroupsWithIds mediaGroupsIds: [NSNumber]) {
+        observable.notifyObservers {
+            $0.medialibrary?(self, didModifyMediaGroupsWithIds: mediaGroupsIds)
+        }
+    }
+
+    func medialibrary(_ medialibrary: VLCMediaLibrary,
+                      didDeleteMediaGroupsWithIds mediaGroupsIds: [NSNumber]) {
+        observable.notifyObservers {
+            $0.medialibrary?(self, didDeleteMediaGroupsWithIds: mediaGroupsIds)
+        }
+    }
+}
+
+// MARK: - VLCMediaLibraryDelegate - Subscriptions
+
+extension MediaLibraryService {
+    func medialibrary(_ medialibrary: VLCMediaLibrary, didAdd subscriptions: [VLCMLSubscription]) {
+        observable.notifyObservers {
+            $0.medialibrary?(self, didAddSubscriptions: subscriptions)
+        }
+    }
+
+    func medialibrary(_ medialibrary: VLCMediaLibrary,
+                      didModifySubscriptionsWithIds subscriptionIds: [NSNumber]) {
+        observable.notifyObservers {
+            $0.medialibrary?(self, didModifySubscriptionsWithIds: subscriptionIds)
+        }
+    }
+
+    func medialibrary(_ medialibrary: VLCMediaLibrary,
+                      didDeleteSubscriptionsWithIds subscriptionIds: [NSNumber]) {
+        observable.notifyObservers {
+            $0.medialibrary?(self, didDeleteSubscriptionsWithIds: subscriptionIds)
+        }
+    }
+
+    func medialibrary(_ medialibrary: VLCMediaLibrary,
+                      didReceiveNewMediaForSubscriptionsWithIds subscriptionIds: [NSNumber]) {
+        observable.notifyObservers {
+            $0.medialibrary?(self, didReceiveNewMediaForSubscriptionsWithIds: subscriptionIds)
+        }
+    }
+
+    func medialibrary(_ medialibrary: VLCMediaLibrary,
+                      didUpdateCacheForSubscriptionWithId subscriptionId: VLCMLIdentifier) {
+        observable.notifyObservers {
+            $0.medialibrary?(self, didUpdateCacheForSubscriptionWithId: subscriptionId)
+        }
+    }
+
+    func medialibrary(_ medialibrary: VLCMediaLibrary,
+                      artworkReadyForSubscriptionWithId subscriptionId: VLCMLIdentifier,
+                      withSuccess success: Bool) {
+        observable.notifyObservers {
+            $0.medialibrary?(self, artworkReadyForSubscriptionWithId: subscriptionId, success: success)
+        }
+    }
+
+    func medialibrary(_ medialibrary: VLCMediaLibrary, cacheIdleChanged idle: Bool) {
+        observable.notifyObservers {
+            $0.medialibrary?(self, cacheIdleChanged: idle)
+        }
+    }
+
+    func medialibrary(_ medialibrary: VLCMediaLibrary, didChangeIdleBackgroundTasksWithSuccess success: Bool) {
+        observable.notifyObservers {
+            $0.medialibrary?(self, backgroundTasksIdleChanged: success)
+        }
+    }
+
+    func medialibrary(_ medialibrary: VLCMediaLibrary,
+                      didStartCachingMediaWithId mediaId: VLCMLIdentifier,
+                      operation: VLCMLCacheOperation) {
+        observable.notifyObservers {
+            $0.medialibrary?(self, didStartCachingMediaWithId: mediaId, operation: operation)
+        }
+    }
+
+    func medialibrary(_ medialibrary: VLCMediaLibrary,
+                      didFinishCachingMediaWithId mediaId: VLCMLIdentifier,
+                      operation: VLCMLCacheOperation,
+                      status: VLCMLCacheStatus) {
+        observable.notifyObservers {
+            $0.medialibrary?(self, didFinishCachingMediaWithId: mediaId, operation: operation,
+                             status: status)
+        }
+    }
+}
+
+// MARK: - VLCMediaLibraryDelegate - Exception handling
+
+extension MediaLibraryService {
+    func medialibrary(_ medialibrary: VLCMediaLibrary,
+                      unhandledExceptionWithContext context: String,
+                      errorMessage: String, clearSuggested: Bool) -> Bool {
+        APLog("MediaLibraryService: unhandled exception in \(context): \(errorMessage)")
+        if clearSuggested {
+#if os(iOS)
+            preserveCorruptedDatabase(reason: .unhandledException,
+                                      details: "\(context): \(errorMessage)")
+#endif
+            medialib.clearDatabase(restorePlaylists: true)
+            if mlServiceType == .mediaLibrary {
+                startMediaLibrary(on: currentMediaPath)
+            }
+        }
+        return true
+    }
+}
+
+// MARK: - VLCMLLoggerDelegate
+
+extension MediaLibraryService: VLCMLLoggerDelegate {
+    func medialibraryDidLogMessage(_ message: String, level: VLCMLLogLevel) {
+        APLog("medialibrary: \(message)")
+
+        medialibraryLogLock.lock()
+        medialibraryLog.append(message)
+        if medialibraryLog.count > MediaLibraryService.medialibraryLogLimit {
+            medialibraryLog.removeFirst(medialibraryLog.count - MediaLibraryService.medialibraryLogLimit)
+        }
+        medialibraryLogLock.unlock()
+    }
+}
+
+// MARK: - VLCMLMediaLibraryDelegate - Force rescan
+
+extension MediaLibraryService {
+    func medialibraryDidStartRescan(_ medialibrary: VLCMediaLibrary) {
+        observable.notifyObservers {
+            $0.medialibraryDidStartRescan?()
+        }
+    }
+}
+
+extension MediaLibraryService {
+    func medialibrary(_ medialibrary: VLCMediaLibrary, historyChangedOf type: VLCMLHistoryType) {
+        observable.notifyObservers {
+            $0.medialibrary?(self, historyChangedOfType: type)
+        }
+    }
+}
+
+// MARK: - VLCMediaLibraryDelegate - Entry points
+
+extension MediaLibraryService {
+    func medialibrary(_ medialibrary: VLCMediaLibrary, didAddEntryPoint entryPoint: String, withSuccess success: Bool) {
+        guard success else {
+            return
+        }
+        observable.notifyObservers {
+            $0.medialibrary?(self, didAddEntryPoint: entryPoint)
+        }
+    }
+
+    func medialibrary(_ medialibrary: VLCMediaLibrary, didRemoveEntryPoint entryPoint: String, withSuccess success: Bool) {
+        guard success else {
+            return
+        }
+        observable.notifyObservers {
+            $0.medialibrary?(self, didRemoveEntryPoint: entryPoint)
+        }
+    }
+
+    func medialibraryDidUpdateExternalFolders(_ medialibrary: VLCMediaLibrary) {
+        observable.notifyObservers {
+            $0.medialibraryDidUpdateExternalFolders?(self)
+        }
+    }
+}
+
+// MARK: - Currently Playing Collection
+
+#if !os(tvOS) && !os(watchOS)
+extension MediaLibraryService {
+    func setCurrentlyPlayingCollection(with model: MediaLibraryBaseModel, for index: Int) {
+        guard index != NSNotFound else {
+            return
+        }
+
+        switch model {
+        case let model as CollectionModel:
+            if let playlist = model.mediaCollection as? VLCMLPlaylist {
+                let info = CurrentlyPlayingCollectionInfo(id: playlist.identifier(), name: playlist.name)
+                currentlyPlayingCollection = CurrentlyPlayingCollectionModel(collectionType: .playlist(info))
+            } else if let videoGroup = model.mediaCollection as? VLCMLMediaGroup {
+                let info = CurrentlyPlayingCollectionInfo(id: videoGroup.identifier(), name: videoGroup.name())
+                currentlyPlayingCollection = CurrentlyPlayingCollectionModel(collectionType: .mediaGroup(info))
+            } else if model.mediaCollection is VLCMLAlbum {
+                currentlyPlayingCollection = CurrentlyPlayingCollectionModel(collectionType: .album)
+            } else if model.mediaCollection is VLCMLArtist {
+                currentlyPlayingCollection = CurrentlyPlayingCollectionModel(collectionType: .artist)
+            }
+            break
+        case is TrackModel:
+            currentlyPlayingCollection = CurrentlyPlayingCollectionModel(collectionType: .allSongs)
+            break
+        case is ArtistModel:
+            currentlyPlayingCollection = CurrentlyPlayingCollectionModel(collectionType: .artist)
+            break
+        case is AlbumModel:
+            currentlyPlayingCollection = CurrentlyPlayingCollectionModel(collectionType: .album)
+            break
+        case let model as MediaGroupViewModel:
+            model.fileArrayLock.lock()
+            let mediaGroup = model.files[index]
+            model.fileArrayLock.unlock()
+            let info = CurrentlyPlayingCollectionInfo(id: mediaGroup.identifier(), name: mediaGroup.name())
+            currentlyPlayingCollection = CurrentlyPlayingCollectionModel(collectionType: .mediaGroup(info))
+            break
+        case let model as PlaylistModel:
+            model.fileArrayLock.lock()
+            let playlist = model.files[index]
+            model.fileArrayLock.unlock()
+            let info = CurrentlyPlayingCollectionInfo(id: playlist.identifier(), name: playlist.name)
+            currentlyPlayingCollection = CurrentlyPlayingCollectionModel(collectionType: .playlist(info))
+            break
+        default:
+            break
+        }
+    }
+}
+#endif
+
+extension MediaLibraryService: VLCMediaParserDelegate {
+    func mediaFinishedParsing(_ media: VLCMedia, with status: VLCMediaParsedStatus) {
+        guard let queuedMediaList = lastPlayedMediaList,
+              media === queuedMediaList || media.url == queuedMediaList.url
+        else { return }
+
+        lastPlayedMediaList = nil
+        let openInMiniPlayer = lastPlayedMediaListOpenInMiniPlayer
+        let fallback = lastPlayedMediaListFallback
+        lastPlayedMediaListFallback = nil
+
+        guard status == .done,
+              let mediaList = media.subitems
+        else {
+            runLastPlayedMediaListFallback(fallback)
+            return
+        }
+
+        let defaults = UserDefaults.standard
+        let mediaCount = mediaList.count
+
+        guard mediaCount > 0 else {
+            runLastPlayedMediaListFallback(fallback)
+            return
+        }
+
+        let lastPlayedMediaId = defaults.integer(forKey: kVLCLastPlayedMediaIdentifier)
+        var lastPlayedMediaIndex = 0
+
+        for i in 0..<mediaCount {
+            guard let media = mediaList.media(at: UInt(i)),
+                  let mlMedia = fetchMedia(with: media.url),
+                  !mlMedia.isExternalMedia()
+            else { continue }
+
+            if mlMedia.identifier() == lastPlayedMediaId {
+                lastPlayedMediaIndex = i
+                break
+            }
+        }
+
+        // The loop above skips external media, so a queue made up of podcast episodes or network
+        // streams alone falls through to the first item and would resurrect it in the mini player.
+        guard let restoredMedia = mediaList.media(at: UInt(lastPlayedMediaIndex)),
+              let restoredLibraryMedia = fetchMedia(with: restoredMedia.url),
+              !restoredLibraryMedia.isExternalMedia()
+        else {
+            runLastPlayedMediaListFallback(fallback)
+            return
+        }
+
+        DispatchQueue.main.async {
+            let playbackService = PlaybackService.sharedInstance()
+            guard !playbackService.playerIsSetup else { return }
+
+            playbackService.configurePlaybackWithMedia(at: lastPlayedMediaIndex,
+                                                       fromCollection: mediaList,
+                                                       openInMiniPlayer: openInMiniPlayer)
+            defaults.set(-1, forKey: kVLCLastPlayedMediaIdentifier)
+        }
+    }
+}

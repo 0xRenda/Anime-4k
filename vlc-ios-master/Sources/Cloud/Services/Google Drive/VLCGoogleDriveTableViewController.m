@@ -1,0 +1,204 @@
+/*****************************************************************************
+ * VLCGoogleDriveTableViewController.m
+ * VLC for iOS
+ *****************************************************************************
+ * Copyright (c) 2013-2015 VideoLAN. All rights reserved.
+ * $Id$
+ *
+ * Authors:  Carola Nitz <nitz.carola # googlemail.com>
+ *        Felix Paul Kühne <fkuehne # videolan.org>
+ *        Soomin Lee <TheHungryBu # gmail.com>
+ *        Eshan Singh <eeeshan789 # gmail.com>
+ * Refer to the COPYING file of the official project for license.
+ *****************************************************************************/
+
+#import "VLCGoogleDriveTableViewController.h"
+#import "VLCAppDelegate.h"
+#import "VLCGoogleDriveController.h"
+#import "GTLRDrive_File+VLCShortcut.h"
+#import "VLCCloudStorageTableViewCell.h"
+#import "VLC-Swift.h"
+
+@import GoogleSignIn;
+
+@interface VLCGoogleDriveTableViewController () <VLCCloudStorageTableViewCell>
+{
+    VLCGoogleDriveController *_googleDriveController;
+
+    VLCGoogleSignInAuthenticator *_signInAuthenticator;
+
+    GTLRDrive_File *_selectedFile;
+}
+
+@end
+
+@implementation VLCGoogleDriveTableViewController
+
+- (void)viewDidLoad
+{
+    [super viewDidLoad];
+
+    _googleDriveController = [VLCGoogleDriveController sharedInstance];
+    _googleDriveController.delegate = self;
+    self.controller = _googleDriveController;
+
+    self.navigationItem.titleView = [[UIImageView alloc] initWithImage:[UIImage imageNamed:@"DriveWhite"]];
+
+    [self.cloudStorageLogo setImage:[UIImage imageNamed:@"DriveWhite"]];
+
+    [self.cloudStorageLogo sizeToFit];
+    self.cloudStorageLogo.center = self.view.center;
+
+    _signInAuthenticator = [VLCGoogleSignInAuthenticator create];
+}
+
+- (void)viewWillAppear:(BOOL)animated
+{
+    [super viewWillAppear:animated];
+
+    [GIDSignIn.sharedInstance restorePreviousSignInWithCompletion:^(GIDGoogleUser * _Nullable user,
+                                                                    NSError * _Nullable error) {
+      if (error) {
+          // No previous session could be loaded
+          [self updateViewAfterSessionChange];
+      } else {
+          [self setAuthorizerAndUpdate];
+      }
+    }];
+}
+
+- (void)scrollViewDidScroll:(UIScrollView *)scrollView
+{
+    NSInteger currentOffset = scrollView.contentOffset.y;
+    NSInteger maximumOffset = scrollView.contentSize.height - scrollView.frame.size.height;
+
+    if (maximumOffset - currentOffset <= - self.tableView.rowHeight) {
+        if (_googleDriveController.hasMoreFiles && !self.activityIndicator.isAnimating) {
+            [self.activityIndicator startAnimating];
+            [_googleDriveController requestNextPage];
+        }
+    }
+}
+
+- (void)viewWillDisappear:(BOOL)animated
+{
+    [super viewWillDisappear:animated];
+    if ((VLCAppDelegate *)[UIApplication sharedApplication].delegate.window.rootViewController.presentedViewController == nil) {
+        [_googleDriveController stopSession];
+        [self.tableView reloadData];
+    }
+
+}
+
+#pragma mark - Table view data source
+
+- (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath
+{
+    static NSString *CellIdentifier = @"GoogleDriveCell";
+
+    VLCCloudStorageTableViewCell *cell = (VLCCloudStorageTableViewCell *)[tableView dequeueReusableCellWithIdentifier:CellIdentifier];
+    if (cell == nil)
+        cell = [VLCCloudStorageTableViewCell cellWithReuseIdentifier:CellIdentifier];
+
+    NSArray *listOfFiles = _googleDriveController.currentListFiles;
+    NSInteger row = indexPath.row;
+    if (row < listOfFiles.count) {
+        cell.driveFile = listOfFiles[row];
+        [cell setIsDownloadable:YES];
+    }
+    cell.delegate = self;
+
+    return cell;
+}
+
+#pragma mark - Table view delegate
+
+- (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath
+{
+    [self.tableView deselectRowAtIndexPath:indexPath animated:NO];
+
+    if (indexPath.row >= _googleDriveController.currentListFiles.count)
+        return;
+
+    _selectedFile = _googleDriveController.currentListFiles[indexPath.row];
+    if (!_selectedFile.vlc_isDirectory) {
+        [_googleDriveController streamFile:_selectedFile];
+    } else {
+        /* dive into subdirectory */
+        if (![self.currentPath isEqualToString:@""])
+            self.currentPath = [self.currentPath stringByAppendingString:@"/"];
+        self.currentPath = [self.currentPath stringByAppendingString:_selectedFile.vlc_targetIdentifier];
+        [self requestInformationForCurrentPath];
+    }
+}
+
+- (void)triggerDownloadForCell:(VLCCloudStorageTableViewCell *)cell
+{
+    _selectedFile = _googleDriveController.currentListFiles[[self.tableView indexPathForCell:cell].row];
+
+    /* selected item is a proper file, ask the user if s/he wants to download it */
+    NSArray<VLCAlertButton *> *buttonsAction = @[
+        [[VLCAlertButton alloc] initWithTitle:NSLocalizedString(@"BUTTON_CANCEL", nil)
+                                       style:UIAlertActionStyleCancel
+                                      action:^(UIAlertAction *action) {
+            self->_selectedFile = nil;
+        }],
+        [[VLCAlertButton alloc] initWithTitle:NSLocalizedString(@"BUTTON_DOWNLOAD", nil)
+                                      action:^(UIAlertAction *action) {
+            if (self->_selectedFile.vlc_isDirectory) {
+                [self->_googleDriveController downloadFileToDocumentFolder:self->_selectedFile :self.currentPath];
+            } else {
+                [self->_googleDriveController downloadFileToDocumentFolder:self->_selectedFile :@""];
+            }
+            self->_selectedFile = nil;
+        }]
+    ];
+
+    [VLCAlertViewController alertViewManagerWithTitle:NSLocalizedString(@"DROPBOX_DOWNLOAD", nil)
+                                         errorMessage:[NSString stringWithFormat:NSLocalizedString(@"DROPBOX_DL_LONG", nil), _selectedFile.name, [[UIDevice currentDevice] model]]
+                                       viewController:self
+                                        buttonsAction:buttonsAction];
+}
+
+#pragma mark - login dialog
+
+- (void)setAuthorizerAndUpdate
+{
+    [self->_googleDriveController applyCurrentUserAuthorizer];
+    [self updateViewAfterSessionChange];
+    [self requestInformationForCurrentPath];
+}
+
+- (IBAction)loginAction:(id)sender
+{
+    if (![_googleDriveController isAuthorized]) {
+
+        self.authorizationInProgress = YES;
+
+        GIDSignIn *googleSignIn = [GIDSignIn sharedInstance];
+        [VLCGoogleSignInAuthenticator signIn:googleSignIn presentingView:self];
+    } else {
+        [_googleDriveController logout];
+    }
+}
+
+- (void)triggerFavoriteForCell:(VLCCloudStorageTableViewCell *)cell 
+{
+    
+    NSIndexPath *indexPath = [self.tableView indexPathForCell:cell];
+    VLCFavoriteService *service = [VLCAppCoordinator sharedInstance].favoriteService;
+    GTLRDrive_File *fileAtIndex = _googleDriveController.currentListFiles[indexPath.row];
+
+    VLCFavorite *fav = [[VLCFavorite alloc] init];
+    fav.userVisibleName = fileAtIndex.name;
+    fav.url = [NSURL URLWithString:[NSString stringWithFormat:@"file://Drive/%@", fileAtIndex.vlc_targetIdentifier]];
+
+    if (cell.isFavourite) {
+        [service addFavorite:fav];
+    } else {
+        [service removeFavorite:fav];
+    }
+}
+
+
+@end

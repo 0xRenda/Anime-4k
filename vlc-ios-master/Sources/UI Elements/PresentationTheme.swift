@@ -1,0 +1,596 @@
+/*****************************************************************************
+ * PresentationTheme.swift
+ * VLC for iOS
+ *****************************************************************************
+ * Copyright (c) 2018-2026 VideoLAN. All rights reserved.
+ * $Id$
+ *
+ * Authors: Carola Nitz <caro # videolan.org>
+ *
+ * Refer to the COPYING file of the official project for license.
+ *****************************************************************************/
+
+import Foundation
+import UIKit
+
+extension Notification.Name {
+    static let VLCThemeDidChangeNotification = Notification.Name("themeDidChangeNotfication")
+}
+
+@objcMembers class ColorPalette: NSObject {
+
+    let isDark: Bool
+    let name: String
+
+#if !os(tvOS)
+    let statusBarStyle: UIStatusBarStyle
+#endif
+    let navigationbarColor: UIColor
+    let navigationbarTextColor: UIColor
+    let background: UIColor
+    let cellBackgroundA: UIColor
+    let cellBackgroundB: UIColor
+    let cellDetailTextColor: UIColor
+    let cellTextColor: UIColor
+    let cellSelectedTextColor: UIColor
+    let lightTextColor: UIColor
+    let sectionHeaderTextColor: UIColor
+    let separatorColor: UIColor
+    let mediaCategorySeparatorColor: UIColor
+    let tabBarColor: UIColor
+    let tabBarIconColor: UIColor
+    let orangeUI: UIColor
+    let orangeDarkAccent: UIColor
+    let secondarySubtitleAccent: UIColor
+    let selectionAccent: UIColor
+    let overlayPrimaryTextColor: UIColor
+    let overlaySecondaryTextColor: UIColor
+    let overlayTertiaryTextColor: UIColor
+    let overlayHairlineColor: UIColor
+    let overlayControlFillColor: UIColor
+#if !os(tvOS)
+    let toolBarStyle: UIBarStyle
+#endif
+    let blurStyle: UIBlurEffect.Style
+    let textfieldBorderColor: UIColor
+    let textfieldPlaceholderColor: UIColor
+    let thumbnailBackgroundColor: UIColor
+    let transparentDarkBackgroundColor: UIColor
+    let pageBackground: UIColor
+    let cardBackground: UIColor
+    let accentTint: UIColor
+
+#if os(tvOS)
+    init(isDark: Bool,
+         name: String,
+         navigationbarColor: UIColor,
+         navigationbarTextColor: UIColor,
+         background: UIColor,
+         cellBackgroundA: UIColor,
+         cellBackgroundB: UIColor,
+         cellDetailTextColor: UIColor,
+         cellTextColor: UIColor,
+         cellSelectedTextColor: UIColor,
+         lightTextColor: UIColor,
+         sectionHeaderTextColor: UIColor,
+         separatorColor: UIColor,
+         mediaCategorySeparatorColor: UIColor,
+         tabBarColor: UIColor,
+         tabBarIconColor: UIColor,
+         orangeUI: UIColor,
+         orangeDarkAccent: UIColor,
+         secondarySubtitleAccent: UIColor,
+         selectionAccent: UIColor,
+         overlayPrimaryTextColor: UIColor,
+         overlaySecondaryTextColor: UIColor,
+         overlayTertiaryTextColor: UIColor,
+         overlayHairlineColor: UIColor,
+         overlayControlFillColor: UIColor,
+         blurStyle: UIBlurEffect.Style,
+         textfieldBorderColor: UIColor,
+         textfieldPlaceholderColor: UIColor,
+         thumbnailBackgroundColor: UIColor,
+         transparentDarkBackgroundColor: UIColor,
+         pageBackground: UIColor,
+         cardBackground: UIColor,
+         accentTint: UIColor) {
+        self.isDark = isDark
+        self.name = name
+        self.navigationbarColor = navigationbarColor
+        self.navigationbarTextColor = navigationbarTextColor
+        self.background = background
+        self.cellBackgroundA = cellBackgroundA
+        self.cellBackgroundB = cellBackgroundB
+        self.cellDetailTextColor = cellDetailTextColor
+        self.cellTextColor = cellTextColor
+        self.cellSelectedTextColor = cellSelectedTextColor
+        self.lightTextColor = lightTextColor
+        self.sectionHeaderTextColor = sectionHeaderTextColor
+        self.separatorColor = separatorColor
+        self.mediaCategorySeparatorColor = mediaCategorySeparatorColor
+        self.tabBarColor = tabBarColor
+        self.tabBarIconColor = tabBarIconColor
+        self.orangeUI = orangeUI
+        self.orangeDarkAccent = orangeDarkAccent
+        self.secondarySubtitleAccent = secondarySubtitleAccent
+        self.selectionAccent = selectionAccent
+        self.overlayPrimaryTextColor = overlayPrimaryTextColor
+        self.overlaySecondaryTextColor = overlaySecondaryTextColor
+        self.overlayTertiaryTextColor = overlayTertiaryTextColor
+        self.overlayHairlineColor = overlayHairlineColor
+        self.overlayControlFillColor = overlayControlFillColor
+        self.blurStyle = blurStyle
+        self.textfieldBorderColor = textfieldBorderColor
+        self.textfieldPlaceholderColor = textfieldPlaceholderColor
+        self.thumbnailBackgroundColor = thumbnailBackgroundColor
+        self.transparentDarkBackgroundColor = transparentDarkBackgroundColor
+        self.pageBackground = pageBackground
+        self.cardBackground = cardBackground
+        self.accentTint = accentTint
+    }
+#else
+    init(isDark: Bool,
+         name: String,
+         statusBarStyle: UIStatusBarStyle,
+         navigationbarColor: UIColor,
+         navigationbarTextColor: UIColor,
+         background: UIColor,
+         cellBackgroundA: UIColor,
+         cellBackgroundB: UIColor,
+         cellDetailTextColor: UIColor,
+         cellTextColor: UIColor,
+         cellSelectedTextColor: UIColor,
+         lightTextColor: UIColor,
+         sectionHeaderTextColor: UIColor,
+         separatorColor: UIColor,
+         mediaCategorySeparatorColor: UIColor,
+         tabBarColor: UIColor,
+         tabBarIconColor: UIColor,
+         orangeUI: UIColor,
+         orangeDarkAccent: UIColor,
+         secondarySubtitleAccent: UIColor,
+         selectionAccent: UIColor,
+         overlayPrimaryTextColor: UIColor,
+         overlaySecondaryTextColor: UIColor,
+         overlayTertiaryTextColor: UIColor,
+         overlayHairlineColor: UIColor,
+         overlayControlFillColor: UIColor,
+         toolBarStyle: UIBarStyle,
+         blurStyle: UIBlurEffect.Style,
+         textfieldBorderColor: UIColor,
+         textfieldPlaceholderColor: UIColor,
+         thumbnailBackgroundColor: UIColor,
+         transparentDarkBackgroundColor: UIColor,
+         pageBackground: UIColor,
+         cardBackground: UIColor,
+         accentTint: UIColor) {
+        self.isDark = isDark
+        self.name = name
+        self.statusBarStyle = statusBarStyle
+        self.navigationbarColor = navigationbarColor
+        self.navigationbarTextColor = navigationbarTextColor
+        self.background = background
+        self.cellBackgroundA = cellBackgroundA
+        self.cellBackgroundB = cellBackgroundB
+        self.cellDetailTextColor = cellDetailTextColor
+        self.cellTextColor = cellTextColor
+        self.cellSelectedTextColor = cellSelectedTextColor
+        self.lightTextColor = lightTextColor
+        self.sectionHeaderTextColor = sectionHeaderTextColor
+        self.separatorColor = separatorColor
+        self.mediaCategorySeparatorColor = mediaCategorySeparatorColor
+        self.tabBarColor = tabBarColor
+        self.tabBarIconColor = tabBarIconColor
+        self.orangeUI = orangeUI
+        self.orangeDarkAccent = orangeDarkAccent
+        self.secondarySubtitleAccent = secondarySubtitleAccent
+        self.selectionAccent = selectionAccent
+        self.overlayPrimaryTextColor = overlayPrimaryTextColor
+        self.overlaySecondaryTextColor = overlaySecondaryTextColor
+        self.overlayTertiaryTextColor = overlayTertiaryTextColor
+        self.overlayHairlineColor = overlayHairlineColor
+        self.overlayControlFillColor = overlayControlFillColor
+        self.toolBarStyle = toolBarStyle
+        self.blurStyle = blurStyle
+        self.textfieldBorderColor = textfieldBorderColor
+        self.textfieldPlaceholderColor = textfieldPlaceholderColor
+        self.thumbnailBackgroundColor = thumbnailBackgroundColor
+        self.transparentDarkBackgroundColor = transparentDarkBackgroundColor
+        self.pageBackground = pageBackground
+        self.cardBackground = cardBackground
+        self.accentTint = accentTint
+    }
+#endif
+}
+
+// MARK: - Typography
+
+@objcMembers class Typography: NSObject {
+
+    let tableHeaderFont: UIFont
+
+    init(tableHeaderFont: UIFont) {
+        self.tableHeaderFont = tableHeaderFont
+    }
+}
+
+// MARK: - PresentationThemeType
+
+enum PresentationThemeType: Int {
+    case bright = 0
+    case dark
+    case auto
+}
+
+// MARK: - PresentationTheme
+
+@objcMembers class PresentationTheme: NSObject {
+
+    static let brightTheme = PresentationTheme(colors: brightPalette)
+    static let darkTheme = PresentationTheme(colors: darkPalette)
+#if os(tvOS)
+    static let blackTheme = PresentationTheme(colors: darkPalette)
+#else
+    static let blackTheme = PresentationTheme(colors: blackPalette)
+#endif
+
+    #if os(visionOS)
+    static let visionTheme = PresentationTheme(colors: visionPalette)
+    #endif
+
+    var isDark: Bool {
+        return colors.isDark
+    }
+
+    var webEquivalentTheme: PresentationTheme {
+        #if os(visionOS)
+        // Since visionOS uses semantic colors for many of these, there will not be equivalent
+        // web hex colors. Fault back to the dark theme
+        return .darkTheme
+        #else
+        return self
+        #endif
+    }
+
+    var isBlack: Bool {
+        return UserDefaults.standard.bool(forKey: kVLCSettingAppThemeBlack)
+    }
+
+    static var current: PresentationTheme = {
+        let themeSettings = UserDefaults.standard.integer(forKey: kVLCSettingAppTheme)
+        return PresentationTheme.respectiveTheme(for: PresentationThemeType(rawValue: themeSettings))
+    }() {
+        didSet {
+#if !os(tvOS)
+            AppearanceManager.setupAppearance(theme: self.current)
+#endif
+            NotificationCenter.default.post(name: .VLCThemeDidChangeNotification, object: self)
+        }
+    }
+
+    static var currentExcludingWhite: PresentationTheme {
+        if PresentationTheme.current.isBlack {
+            return PresentationTheme.blackTheme
+        } else {
+            return PresentationTheme.darkTheme
+        }
+    }
+
+    init(colors: ColorPalette) {
+        self.colors = colors
+        super.init()
+    }
+
+    @objc static func themeDidUpdate() {
+        let themeSettings = UserDefaults.standard.integer(forKey: kVLCSettingAppTheme)
+        PresentationTheme.current = PresentationTheme.respectiveTheme(for:
+            PresentationThemeType(rawValue: themeSettings))
+    }
+
+    static func respectiveTheme(for theme: PresentationThemeType?, excludingBlackTheme: Bool = false, traitCollection: UITraitCollection? = nil) -> PresentationTheme {
+#if os(visionOS)
+        return .visionTheme
+#else
+        guard let theme = theme else {
+            return PresentationTheme.brightTheme
+        }
+
+        var presentationTheme = PresentationTheme.brightTheme
+        var darkTheme: PresentationTheme
+
+        if UserDefaults.standard.bool(forKey: kVLCSettingAppThemeBlack) {
+            darkTheme = PresentationTheme.blackTheme
+        } else {
+            darkTheme = PresentationTheme.darkTheme
+        }
+
+        if theme == .dark {
+            presentationTheme = darkTheme
+        } else if theme == .auto {
+#if os(iOS) || os(tvOS)
+            let traits = traitCollection ?? UITraitCollection.current
+            let isSystemDarkTheme = traits.userInterfaceStyle == .dark
+            presentationTheme = isSystemDarkTheme ? darkTheme : PresentationTheme.brightTheme
+#else
+            presentationTheme = darkTheme
+#endif // os(iOS) || os(tvOS)
+        }
+        return presentationTheme
+#endif // os(visionOS)
+    }
+
+    let colors: ColorPalette
+    let font = defaultFont
+}
+
+// MARK: - UIColor
+
+@objc extension UIColor {
+
+    convenience init(_ rgbValue: UInt32, _ alpha: CGFloat = 1.0) {
+        let r = CGFloat((rgbValue & 0xFF0000) >> 16) / 255.0
+        let g = CGFloat((rgbValue & 0xFF00) >> 8) / 255.0
+        let b = CGFloat(rgbValue & 0xFF) / 255.0
+        self.init(red: r, green: g, blue: b, alpha: alpha)
+    }
+
+    func desaturated(_ scale: CGFloat) -> UIColor {
+        var hue: CGFloat = 0
+        var saturation: CGFloat = 0
+        var brightness: CGFloat = 0
+        var alpha: CGFloat = 0
+        guard getHue(&hue, saturation: &saturation, brightness: &brightness, alpha: &alpha) else {
+            return self
+        }
+        return UIColor(hue: hue, saturation: saturation * scale, brightness: brightness, alpha: alpha)
+    }
+
+    private func toHex(alpha: Bool = false) -> String? {
+        guard let components = cgColor.components, components.count >= 3 else {
+            assertionFailure()
+            return nil
+        }
+        let r = Float(components[0])
+        let g = Float(components[1])
+        let b = Float(components[2])
+        var a = Float(1.0)
+
+        if components.count == 4 {
+            a = Float(components[3])
+        }
+
+        if alpha {
+            return String(format: "#%02lX%02lX%02lX%02lX", lroundf(r * 255), lroundf(g * 255), lroundf(b * 255), lroundf(a * 255))
+        } else {
+            return String(format: "#%02lX%02lX%02lX", lroundf(r * 255), lroundf(g * 255), lroundf(b * 255))
+        }
+    }
+
+    var toHex: String? {
+        return toHex()
+    }
+}
+
+// MARK: - Color Palettes
+
+#if os(tvOS)
+
+let brightPalette = ColorPalette(isDark: false,
+                                 name: "Default",
+                                 navigationbarColor: UIColor(0xFFFFFF),
+                                 navigationbarTextColor: UIColor(0x000000),
+                                 background: UIColor(0xFFFFFF),
+                                 cellBackgroundA: UIColor(0xFFFFFF),
+                                 cellBackgroundB: UIColor(0xE5E5E3),
+                                 cellDetailTextColor: UIColor(0x919191),
+                                 cellTextColor: UIColor(0x000000),
+                                 cellSelectedTextColor: UIColor(0x474747),
+                                 lightTextColor: UIColor(0x888888),
+                                 sectionHeaderTextColor: UIColor(0x25292C),
+                                 separatorColor: UIColor(0xF0F2F7),
+                                 mediaCategorySeparatorColor: UIColor(0xECF2F6),
+                                 tabBarColor: UIColor(0xFFFFFF),
+                                 tabBarIconColor: UIColor(0x88949c),
+                                 orangeUI: UIColor(0xFF8800),
+                                 orangeDarkAccent: UIColor(0xFF8800),
+                                 secondarySubtitleAccent: UIColor(0x32C8FF),
+                                 selectionAccent: UIColor(0xFFB70D),
+                                 overlayPrimaryTextColor: UIColor(0x000000),
+                                 overlaySecondaryTextColor: UIColor(0x000000, 0.7),
+                                 overlayTertiaryTextColor: UIColor(0x000000, 0.4),
+                                 overlayHairlineColor: UIColor(0x000000, 0.18),
+                                 overlayControlFillColor: UIColor(0x000000, 0.08),
+                                 blurStyle: .extraLight,
+                                 textfieldBorderColor: UIColor(0x84929C),
+                                 textfieldPlaceholderColor: UIColor(0xB3B3B3),
+                                 thumbnailBackgroundColor: UIColor(0xE6E6E6),
+                                 transparentDarkBackgroundColor: UIColor(0x1E1E1E, 0.5),
+                                 pageBackground: UIColor(0xF2F2F4),
+                                 cardBackground: UIColor(0xFFFFFF),
+                                 accentTint: UIColor(0xFF8800, 0.13))
+
+let darkPalette = ColorPalette(isDark: true,
+                               name: "Dark",
+                               navigationbarColor: UIColor(0x1B1E21),
+                               navigationbarTextColor: UIColor(0xFFFFFF),
+                               background: UIColor(0x1B1E21),
+                               cellBackgroundA: UIColor(0x1B1E21),
+                               cellBackgroundB: UIColor(0x494B4D),
+                               cellDetailTextColor: UIColor(0x919191),
+                               cellTextColor: UIColor(0xFFFFFF),
+                               cellSelectedTextColor: UIColor(0x474747),
+                               lightTextColor: UIColor(0xB8B8B8),
+                               sectionHeaderTextColor: UIColor(0x828282),
+                               separatorColor: UIColor(0x25292C),
+                               mediaCategorySeparatorColor: UIColor(0x25292C),
+                               tabBarColor: UIColor(0x25292C),
+                               tabBarIconColor: UIColor(0x88949c),
+                               orangeUI: UIColor(0xFF8800),
+                               orangeDarkAccent: UIColor(0xD57200),
+                               secondarySubtitleAccent: UIColor(0x32C8FF),
+                               selectionAccent: UIColor(0xFFB70D),
+                               overlayPrimaryTextColor: UIColor(0xFFFFFF),
+                               overlaySecondaryTextColor: UIColor(0xFFFFFF, 0.7),
+                               overlayTertiaryTextColor: UIColor(0xFFFFFF, 0.4),
+                               overlayHairlineColor: UIColor(0xFFFFFF, 0.18),
+                               overlayControlFillColor: UIColor(0xFFFFFF, 0.08),
+                               blurStyle: .dark,
+                               textfieldBorderColor: UIColor(0x84929C),
+                               textfieldPlaceholderColor: UIColor(0x737373),
+                               thumbnailBackgroundColor: UIColor(0x26282B),
+                               transparentDarkBackgroundColor: UIColor(0x1E1E1E, 0.5),
+                               pageBackground: UIColor(0x121417),
+                               cardBackground: UIColor(0x1B1E21),
+                               accentTint: UIColor(0xFF8800, 0.22))
+
+#else // !os(tvOS)
+
+let brightPalette = ColorPalette(isDark: false,
+                                 name: "Default",
+                                 statusBarStyle: .darkContent,
+                                 navigationbarColor: UIColor(0xFFFFFF),
+                                 navigationbarTextColor: UIColor(0x000000),
+                                 background: UIColor(0xFFFFFF),
+                                 cellBackgroundA: UIColor(0xFFFFFF),
+                                 cellBackgroundB: UIColor(0xE5E5E3),
+                                 cellDetailTextColor: UIColor(0x919191),
+                                 cellTextColor: UIColor(0x000000),
+                                 cellSelectedTextColor: UIColor(0x474747),
+                                 lightTextColor: UIColor(0x888888),
+                                 sectionHeaderTextColor: UIColor(0x25292C),
+                                 separatorColor: UIColor(0xF0F2F7),
+                                 mediaCategorySeparatorColor: UIColor(0xECF2F6),
+                                 tabBarColor: UIColor(0xFFFFFF),
+                                 tabBarIconColor: UIColor(0x88949c),
+                                 orangeUI: UIColor(0xFF8800),
+                                 orangeDarkAccent: UIColor(0xFF8800),
+                                 secondarySubtitleAccent: UIColor(0x32C8FF),
+                                 selectionAccent: UIColor(0xFFB70D),
+                                 overlayPrimaryTextColor: UIColor(0x000000),
+                                 overlaySecondaryTextColor: UIColor(0x000000, 0.7),
+                                 overlayTertiaryTextColor: UIColor(0x000000, 0.4),
+                                 overlayHairlineColor: UIColor(0x000000, 0.18),
+                                 overlayControlFillColor: UIColor(0x000000, 0.08),
+                                 toolBarStyle: UIBarStyle.default,
+                                 blurStyle: .extraLight,
+                                 textfieldBorderColor: UIColor(0x84929C),
+                                 textfieldPlaceholderColor: UIColor(0xB3B3B3),
+                                 thumbnailBackgroundColor: UIColor(0xE6E6E6),
+                                 transparentDarkBackgroundColor: UIColor(0x1E1E1E, 0.5),
+                                 pageBackground: UIColor(0xF2F2F4),
+                                 cardBackground: UIColor(0xFFFFFF),
+                                 accentTint: UIColor(0xFF8800, 0.13))
+
+let darkPalette = ColorPalette(isDark: true,
+                               name: "Dark",
+                               statusBarStyle: .lightContent,
+                               navigationbarColor: UIColor(0x1B1E21),
+                               navigationbarTextColor: UIColor(0xFFFFFF),
+                               background: UIColor(0x1B1E21),
+                               cellBackgroundA: UIColor(0x1B1E21),
+                               cellBackgroundB: UIColor(0x494B4D),
+                               cellDetailTextColor: UIColor(0x919191),
+                               cellTextColor: UIColor(0xFFFFFF),
+                               cellSelectedTextColor: UIColor(0x474747),
+                               lightTextColor: UIColor(0xB8B8B8),
+                               sectionHeaderTextColor: UIColor(0x828282),
+                               separatorColor: UIColor(0x25292C),
+                               mediaCategorySeparatorColor: UIColor(0x25292C),
+                               tabBarColor: UIColor(0x25292C),
+                               tabBarIconColor: UIColor(0x88949c),
+                               orangeUI: UIColor(0xFF8800),
+                               orangeDarkAccent: UIColor(0xD57200),
+                               secondarySubtitleAccent: UIColor(0x32C8FF),
+                               selectionAccent: UIColor(0xFFB70D),
+                               overlayPrimaryTextColor: UIColor(0xFFFFFF),
+                               overlaySecondaryTextColor: UIColor(0xFFFFFF, 0.7),
+                               overlayTertiaryTextColor: UIColor(0xFFFFFF, 0.4),
+                               overlayHairlineColor: UIColor(0xFFFFFF, 0.18),
+                               overlayControlFillColor: UIColor(0xFFFFFF, 0.08),
+                               toolBarStyle: UIBarStyle.black,
+                               blurStyle: .dark,
+                               textfieldBorderColor: UIColor(0x84929C),
+                               textfieldPlaceholderColor: UIColor(0x737373),
+                               thumbnailBackgroundColor: UIColor(0x26282B),
+                               transparentDarkBackgroundColor: UIColor(0x1E1E1E, 0.5),
+                               pageBackground: UIColor(0x121417),
+                               cardBackground: UIColor(0x1B1E21),
+                               accentTint: UIColor(0xFF8800, 0.22))
+
+let blackPalette = ColorPalette(isDark: true,
+                                name: "Dark",
+                                statusBarStyle: .lightContent,
+                                navigationbarColor: UIColor(0x000000),
+                                navigationbarTextColor: UIColor(0xFFFFFF),
+                                background: UIColor(0x000000),
+                                cellBackgroundA: UIColor(0x000000),
+                                cellBackgroundB: UIColor(0x494B4D),
+                                cellDetailTextColor: UIColor(0x919191),
+                                cellTextColor: UIColor(0xFFFFFF),
+                                cellSelectedTextColor: UIColor(0x474747),
+                                lightTextColor: UIColor(0xB8B8B8),
+                                sectionHeaderTextColor: UIColor(0x828282),
+                                separatorColor: UIColor(0x25292C),
+                                mediaCategorySeparatorColor: UIColor(0x25292C),
+                                tabBarColor: UIColor(0x000000),
+                                tabBarIconColor: UIColor(0x88949c),
+                                orangeUI: UIColor(0xFF8800),
+                                orangeDarkAccent: UIColor(0xD57200),
+                                secondarySubtitleAccent: UIColor(0x32C8FF),
+                                selectionAccent: UIColor(0xFFB70D),
+                                overlayPrimaryTextColor: UIColor(0xFFFFFF),
+                                overlaySecondaryTextColor: UIColor(0xFFFFFF, 0.7),
+                                overlayTertiaryTextColor: UIColor(0xFFFFFF, 0.4),
+                                overlayHairlineColor: UIColor(0xFFFFFF, 0.18),
+                                overlayControlFillColor: UIColor(0xFFFFFF, 0.08),
+                                toolBarStyle: UIBarStyle.black,
+                                blurStyle: .dark,
+                                textfieldBorderColor: UIColor(0x84929C),
+                                textfieldPlaceholderColor: UIColor(0x737373),
+                                thumbnailBackgroundColor: UIColor(0x1C1E21),
+                                transparentDarkBackgroundColor: UIColor(0x1E1E1E, 0.5),
+                                pageBackground: UIColor(0x000000),
+                                cardBackground: UIColor(0x1B1E21),
+                                accentTint: UIColor(0xFF8800, 0.22))
+
+#if os(visionOS)
+let visionPalette = ColorPalette(isDark: true,
+                                 name: "visionOS",
+                                 statusBarStyle: .lightContent,
+                                 navigationbarColor: .clear,
+                                 navigationbarTextColor: .label,
+                                 background: .clear,
+                                 cellBackgroundA: .clear,
+                                 cellBackgroundB: UIColor(0x494B4D, 0.2),
+                                 cellDetailTextColor: .tertiaryLabel,
+                                 cellTextColor: .label,
+                                 cellSelectedTextColor: UIColor(0x474747),
+                                 lightTextColor: .secondaryLabel,
+                                 sectionHeaderTextColor: .secondaryLabel,
+                                 separatorColor: .tertiarySystemFill,
+                                 mediaCategorySeparatorColor: .tertiarySystemFill,
+                                 tabBarColor: .clear,
+                                 tabBarIconColor: UIColor(0x88949c),
+                                 orangeUI: UIColor(0xFF8800),
+                                 orangeDarkAccent: UIColor(0xD57200),
+                                 secondarySubtitleAccent: UIColor(0x32C8FF),
+                                 selectionAccent: UIColor(0xFFB70D),
+                                 overlayPrimaryTextColor: UIColor(0xFFFFFF),
+                                 overlaySecondaryTextColor: UIColor(0xFFFFFF, 0.7),
+                                 overlayTertiaryTextColor: UIColor(0xFFFFFF, 0.4),
+                                 overlayHairlineColor: UIColor(0xFFFFFF, 0.18),
+                                 overlayControlFillColor: UIColor(0xFFFFFF, 0.08),
+                                 toolBarStyle: UIBarStyle.black,
+                                 blurStyle: .dark,
+                                 textfieldBorderColor: UIColor(0x84929C),
+                                 textfieldPlaceholderColor: UIColor(0x737373),
+                                 thumbnailBackgroundColor: UIColor(0x1C1E21),
+                                 transparentDarkBackgroundColor: UIColor(0x1E1E1E, 0.5),
+                                 pageBackground: .clear,
+                                 cardBackground: UIColor(0x494B4D, 0.2),
+                                 accentTint: UIColor(0xFF8800, 0.22))
+#endif
+
+#endif // !os(tvOS)
+
+let defaultFont = Typography(tableHeaderFont: UIFont.systemFont(ofSize: 24, weight: .semibold))

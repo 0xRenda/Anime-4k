@@ -1,0 +1,38 @@
+/*****************************************************************************
+ * Prefix header for all source files of the 'VLC for Apple TV' target
+ * VLC for iOS
+ *****************************************************************************
+ * Copyright (c) 2015-2026 VideoLAN. All rights reserved.
+ * $Id$
+ *
+ * Authors: Felix Paul Kühne <fkuehne # videolan.org>
+ *
+ * Refer to the COPYING file of the official project for license.
+ *****************************************************************************/
+
+#ifndef PrefixHeader_pch
+#define PrefixHeader_pch
+
+#ifdef __OBJC__
+#import <UIKit/UIKit.h>
+#import <Foundation/Foundation.h>
+#endif
+
+#import <VLCKit/VLCKit.h>
+#import <VLCKit/vlc/libvlc_version.h>
+
+#import "VLCTVConstants.h"
+#import "UIViewController+VLCAlert.h"
+#import "VLCFullscreenMovieTVViewController.h"
+
+#ifndef NDEBUG
+#define APLog(format, ...) NSLog(format, ## __VA_ARGS__)
+#else
+#define APLog(format, ...)
+#endif
+
+#define MEDIA_PLAYBACK_DEBUG 0
+#define MEDIA_DISCOVERY_DEBUG 0
+#define WIFI_SHARING_DEBUG 0
+
+#endif /* PrefixHeader_pch */

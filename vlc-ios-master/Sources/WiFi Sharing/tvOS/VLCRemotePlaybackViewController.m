@@ -1,0 +1,682 @@
+/*****************************************************************************
+ * VLC for iOS
+ *****************************************************************************
+ * Copyright (c) 2015-2019 VideoLAN. All rights reserved.
+ * $Id$
+ *
+ * Authors: Felix Paul Kühne <fkuehne # videolan.org>
+ *          Tobias Conradi <videolan # tobias-conradi.de>
+ *
+ * Refer to the COPYING file of the official project for license.
+ *****************************************************************************/
+
+#import "VLCRemotePlaybackViewController.h"
+#import "Reachability.h"
+#import "VLCHTTPUploaderController.h"
+#import "VLCQRCodeGenerator.h"
+#import "VLCMovieTVCollectionViewCell.h"
+#import "VLCMediaTVCollectionViewCell.h"
+#import "VLCMaskView.h"
+#import "CAAnimation+VLCWiggle.h"
+#import "VLC-Swift.h"
+#import "VLCAppCoordinator.h"
+
+static NSString * const VLCMediaFooterIdentifier = @"VLCMediaFooterView";
+
+@interface VLCRemotePlaybackViewController () <UICollectionViewDataSource, UICollectionViewDelegate, UITextFieldDelegate, MediaLibraryDelegate>
+
+@property (strong, nonatomic) Reachability *reachability;
+@property (nonatomic) NSIndexPath *currentlyFocusedIndexPath;
+@property (strong) MediaLibraryService *mediaLibraryService;
+@property (strong) VideoModel *videoModel;
+@property (strong) TrackModel *audioModel;
+@property (nonatomic) BOOL isAudio;
+@property (nonatomic) TVModelObserver *modelObserver;
+@property (nonatomic) SortingHandler *sortHandler;
+
+// Editing Properties
+@property (nonatomic) BOOL editSelectionActive;
+@property (nonatomic) UIButton* addToPlaylist;
+@property (nonatomic, strong) NSMapTable<VLCMovieTVCollectionViewCell *, VLCMLMedia *> *cellToMediaMap;
+
+// Searching properties
+@property (nonatomic, assign) BOOL didBeginSearching;
+@property (nonatomic, strong) NSMutableArray<VLCMLMedia*> *searchedMedia;
+
+@property (nonatomic, weak) UILabel *cachedMediaLabel;
+@property (nonatomic, weak) UILabel *cachedMediaLongLabel;
+
+@end
+
+@implementation VLCRemotePlaybackViewController
+{
+     NSString *_qrCodeAddress;
+}
+
+- (NSString *)title
+{
+     return NSLocalizedString(@"WEBINTF_TITLE_ATV", nil);
+}
+
+- (void)viewDidLoad
+{
+     [super viewDidLoad];
+
+     // Media Library Service
+     _mediaLibraryService = [[VLCAppCoordinator sharedInstance] mediaLibraryService];
+
+     // Init the models
+     _videoModel = [[VideoModel alloc] initWithMedialibrary:_mediaLibraryService];
+
+     _audioModel = [[TrackModel alloc] initWithMedialibrary:_mediaLibraryService];
+
+     _modelObserver = [[TVModelObserver alloc] initWithObserverDelegate: self videoModel: _videoModel audioModel: _audioModel];
+
+     [_modelObserver observeLibrary];
+
+     self.cellToMediaMap = [NSMapTable strongToStrongObjectsMapTable];
+     _sortHandler = [[SortingHandler alloc] initWithVideoModel:_videoModel];
+
+     [self.contentSwitchSegmentedControl setTitle:NSLocalizedString(@"VIDEO", nil) forSegmentAtIndex:0];
+     [self.contentSwitchSegmentedControl setTitle:NSLocalizedString(@"AUDIO", nil) forSegmentAtIndex:1];
+     [self.deleteButton setImage:[UIImage systemImageNamed:@"trash"] forState:UIControlStateNormal];
+     self.deleteButton.tintColor = [UIColor redColor];
+
+     _searchedMedia = [[NSMutableArray alloc] init];
+     _searchBar.delegate = self;
+     _didBeginSearching = NO;
+
+     self.qrCodeContainerView.layer.cornerRadius = 12.;
+     self.qrCodeContainerView.isAccessibilityElement = YES;
+     self.qrCodeContainerView.accessibilityLabel = NSLocalizedString(@"HTTP_UPLOAD_QR_CODE", nil);
+     self.qrCodeImageView.layer.magnificationFilter = kCAFilterNearest;
+     [self updateTheme];
+
+     self.navigationController.navigationBarHidden = YES;
+
+     UICollectionViewFlowLayout *flowLayout = (UICollectionViewFlowLayout *)self.cachedMediaCollectionView.collectionViewLayout;
+     const CGFloat inset = 50.;
+     flowLayout.sectionInset = UIEdgeInsetsMake(inset, inset, 40, inset);
+     flowLayout.itemSize = [VLCMovieTVCollectionViewCell cellSize];
+     flowLayout.minimumInteritemSpacing = 48.0;
+     flowLayout.minimumLineSpacing = 80.0;
+     [self.cachedMediaCollectionView registerClass:[VLCMovieTVCollectionViewCell class]
+                       forCellWithReuseIdentifier:VLCMovieTVCollectionViewCellIdentifier];
+     [self.cachedMediaCollectionView registerClass:[VLCMediaTVCollectionViewCell class]
+                       forCellWithReuseIdentifier:VLCMediaTVCollectionViewCellIdentifier];
+     [self.cachedMediaCollectionView registerClass:[UICollectionReusableView class]
+                        forSupplementaryViewOfKind:UICollectionElementKindSectionFooter
+                               withReuseIdentifier:VLCMediaFooterIdentifier];
+     CGFloat footerWidth = self.view.bounds.size.width - 400.0;
+     CGSize constraintSize = CGSizeMake(footerWidth, CGFLOAT_MAX);
+     CGFloat headlineHeight = [NSLocalizedString(@"CACHED_MEDIA", nil)
+                               boundingRectWithSize:constraintSize
+                               options:NSStringDrawingUsesLineFragmentOrigin
+                               attributes:@{NSFontAttributeName: [UIFont preferredFontForTextStyle:UIFontTextStyleHeadline]}
+                               context:nil].size.height;
+     CGFloat bodyHeight = [NSLocalizedString(@"CACHED_MEDIA_LONG", nil)
+                           boundingRectWithSize:constraintSize
+                           options:NSStringDrawingUsesLineFragmentOrigin
+                           attributes:@{NSFontAttributeName: [UIFont preferredFontForTextStyle:UIFontTextStyleBody]}
+                           context:nil].size.height;
+     flowLayout.footerReferenceSize = CGSizeMake(0, ceil(headlineHeight + bodyHeight + 46.0));
+
+     self.reachability = [Reachability reachabilityForLocalWiFi];
+
+     NSNotificationCenter *notificationCenter = [NSNotificationCenter defaultCenter];
+     [notificationCenter addObserver:self
+                            selector:@selector(reachabilityChanged)
+                                name:kReachabilityChangedNotification
+                              object:nil];
+     [notificationCenter addObserver:self
+                            selector:@selector(updateTheme)
+                                name:kVLCThemeDidChangeNotification
+                              object:nil];
+
+
+     /* After day 354 of the year, the usual VLC cone is replaced by another cone
+      * wearing a Father Xmas hat.
+      * Note: this icon doesn't represent an endorsement of The Coca-Cola Company
+      * and should not be confused with the idea of religious statements or propagation there off
+      */
+     NSCalendar *gregorian =
+     [[NSCalendar alloc] initWithCalendarIdentifier:NSCalendarIdentifierGregorian];
+     NSUInteger dayOfYear = [gregorian ordinalityOfUnit:NSCalendarUnitDay inUnit:NSCalendarUnitYear forDate:[NSDate date]];
+     if (dayOfYear >= 354)
+          self.cachedMediaConeImageView.image = [UIImage imageNamed:@"xmas-cone"];
+}
+
+- (void)viewDidLayoutSubviews
+{
+     [super viewDidLayoutSubviews];
+
+     UICollectionView *collectionView = self.cachedMediaCollectionView;
+     VLCMaskView *maskView = (VLCMaskView *)collectionView.maskView;
+     maskView.maskEnd = self.view.safeAreaInsets.top * 0.8;
+
+     /*
+      Update the position from where the collection view's content should
+      start to fade out. The size of the fade increases as the collection
+      view scrolls to a maximum of half the navigation bar's height.
+      */
+     CGFloat maximumMaskStart = maskView.maskEnd + (self.view.safeAreaInsets.top * 0.5);
+     CGFloat verticalScrollPosition = MAX(0, collectionView.contentOffset.y + collectionView.contentInset.top);
+     maskView.maskStart = MIN(maximumMaskStart, maskView.maskEnd + verticalScrollPosition);
+
+     /*
+      Position the mask view so that it is always fills the visible area of
+      the collection view.
+      */
+     CGSize collectionViewSize = collectionView.bounds.size;
+     maskView.frame = CGRectMake(0, collectionView.contentOffset.y, collectionViewSize.width, collectionViewSize.height);
+}
+
+- (void)viewWillAppear:(BOOL)animated
+{
+     [super viewWillAppear:animated];
+
+     [self.reachability startNotifier];
+     [self updateHTTPServerAddress];
+}
+
+- (void)viewWillDisappear:(BOOL)animated
+{
+     [super viewWillDisappear:animated];
+
+     [self.reachability stopNotifier];
+}
+
+- (void)reachabilityChanged
+{
+     [self updateHTTPServerAddress];
+}
+
+- (void)updateTheme
+{
+     ColorPalette *colors = PresentationTheme.current.colors;
+     self.cachedMediaLabel.textColor = colors.cellTextColor;
+     self.cachedMediaLongLabel.textColor = colors.cellDetailTextColor;
+     self.qrCodeContainerView.backgroundColor = colors.background;
+     self.qrCodeImageView.tintColor = colors.cellTextColor;
+}
+
+- (void)updateHTTPServerAddress
+{
+     BOOL connectedViaWifi = self.reachability.currentReachabilityStatus == ReachableViaWiFi;
+     self.toggleHTTPServerButton.enabled = connectedViaWifi;
+     NSString *uploadText = connectedViaWifi ? [[[VLCAppCoordinator sharedInstance] httpUploaderController] httpStatus] : NSLocalizedString(@"HTTP_UPLOAD_NO_CONNECTIVITY", nil);
+     self.httpServerLabel.text = uploadText;
+     if (connectedViaWifi && [[VLCAppCoordinator sharedInstance] httpUploaderController].isServerRunning)
+          [self.toggleHTTPServerButton setTitle:NSLocalizedString(@"HTTP_SERVER_ON", nil) forState:UIControlStateNormal];
+     else
+          [self.toggleHTTPServerButton setTitle:NSLocalizedString(@"HTTP_SERVER_OFF", nil) forState:UIControlStateNormal];
+
+     VLCHTTPUploaderController *uploader = [[VLCAppCoordinator sharedInstance] httpUploaderController];
+     NSString *address = (connectedViaWifi && uploader.isServerRunning) ? uploader.addressToCopy : nil;
+     if (![address isEqualToString:_qrCodeAddress]) {
+          _qrCodeAddress = address;
+          self.qrCodeImageView.image = address ? [VLCQRCodeGenerator QRCodeImageForString:address] : nil;
+     }
+     self.qrCodeContainerView.hidden = address == nil;
+}
+
+- (IBAction)toggleEditSelectionMode:(id)sender
+{
+     _editSelectionActive = !_editSelectionActive;
+
+     _sortButton.hidden = _editSelectionActive;
+     _deleteButton.hidden = !_editSelectionActive;
+     _playlistButton.hidden = !_editSelectionActive;
+
+     if (!_editSelectionActive) {
+          [self.cellToMediaMap removeAllObjects];
+     }
+
+     [self.cachedMediaCollectionView reloadData];
+}
+
+- (IBAction)addToPlaylist:(id)sender
+{
+     NSMutableArray *playlistMedia = [NSMutableArray array];
+
+     for (id cell in [self.cellToMediaMap keyEnumerator]) {
+          VLCMLMedia *media = [self.cellToMediaMap objectForKey:cell];
+          [playlistMedia addObject:media];
+     }
+
+     [self.cellToMediaMap removeAllObjects];
+
+     _editSelectionActive = NO;
+     _sortButton.hidden = NO;
+     _deleteButton.hidden = YES;
+     _playlistButton.hidden = YES;
+     [self.cachedMediaCollectionView reloadData];
+
+     if (playlistMedia.count != 0) {
+          AddToPlaylistViewController *addtoplaylistController = [[AddToPlaylistViewController alloc] init];
+          addtoplaylistController.mediaToAdd = playlistMedia;
+          [self presentViewController:addtoplaylistController animated:YES completion:nil];
+     }
+}
+
+- (void)toggleHTTPServer:(id)sender
+{
+     BOOL futureHTTPServerState = ![[VLCAppCoordinator sharedInstance] httpUploaderController].isServerRunning ;
+     [[NSUserDefaults standardUserDefaults] setBool:futureHTTPServerState forKey:kVLCSettingSaveHTTPUploadServerStatus];
+     [[[VLCAppCoordinator sharedInstance] httpUploaderController] changeHTTPServerState:futureHTTPServerState];
+     [self updateHTTPServerAddress];
+     [[NSUserDefaults standardUserDefaults] synchronize];
+}
+
+- (IBAction)sortMedia:(id)sender
+{
+     [_sortHandler constructSortAlertWithRemotePlaybackView: self playlistView: nil];
+}
+
+- (void)deleteSelection:(id)sender
+{
+     NSMutableArray *mediaToDelete = [NSMutableArray array];
+
+     for (id cell in [self.cellToMediaMap keyEnumerator]) {
+          VLCMLMedia *media = [self.cellToMediaMap objectForKey:cell];
+          [mediaToDelete addObject:media];
+     }
+
+     NSUInteger count = mediaToDelete.count;
+     if (count == 0) {
+          return;
+     }
+
+     NSString *title;
+     if (count == 1) {
+          title = [NSString stringWithFormat:NSLocalizedString(@"DELETE_SINGLE_TITLE", nil),
+                   ((VLCMLMedia *)mediaToDelete.firstObject).title];
+     } else {
+          title = [NSString stringWithFormat:NSLocalizedString(@"DELETE_MULTIPLE_TITLE", nil),
+                   ((VLCMLMedia *)mediaToDelete.firstObject).title, (int)(count - 1)];
+     }
+
+     UIAlertController *alert = [UIAlertController alertControllerWithTitle:title
+                                                                    message:NSLocalizedString(@"DELETE_MESSAGE", nil)
+                                                             preferredStyle:UIAlertControllerStyleAlert];
+
+     [alert addAction:[UIAlertAction actionWithTitle:NSLocalizedString(@"BUTTON_DELETE", nil)
+                                               style:UIAlertActionStyleDestructive
+                                             handler:^(UIAlertAction * _Nonnull action) {
+          for (VLCMLMedia *media in mediaToDelete) {
+               [media deleteMainFile];
+          }
+
+          [self.cellToMediaMap removeAllObjects];
+          self->_editSelectionActive = NO;
+          self->_sortButton.hidden = NO;
+          self->_deleteButton.hidden = YES;
+          self->_playlistButton.hidden = YES;
+          [self.cachedMediaCollectionView reloadData];
+     }]];
+
+     [alert addAction:[UIAlertAction actionWithTitle:NSLocalizedString(@"BUTTON_CANCEL", nil)
+                                               style:UIAlertActionStyleCancel
+                                             handler:nil]];
+
+     [self presentViewController:alert animated:YES completion:nil];
+}
+
+#pragma mark - collection view data source
+
+- (UICollectionViewCell *)collectionView:(UICollectionView *)collectionView cellForItemAtIndexPath:(NSIndexPath *)indexPath
+{
+     NSUInteger row = indexPath.row;
+
+     VLCMLMedia *media = nil;
+
+     if (_didBeginSearching) {
+          media = _searchedMedia[row];
+     } else {
+          if (!_isAudio) {
+               media = [_videoModel getMediaAt:row];
+          } else {
+               media = [_audioModel getMediaAt:row];
+          }
+     }
+
+     [_mediaLibraryService requestThumbnailFor:media];
+
+     if (_isAudio) {
+          VLCMediaTVCollectionViewCell *cell = (VLCMediaTVCollectionViewCell *)[collectionView dequeueReusableCellWithReuseIdentifier:VLCMediaTVCollectionViewCellIdentifier forIndexPath:indexPath];
+          [cell configureWithMedia:media];
+          if (_editSelectionActive) {
+               _searchBar.hidden = YES;
+               cell.checkboxImageView.image = [UIImage imageNamed:@"checkboxEmpty"];
+               cell.checkboxImageView.hidden = NO;
+          } else {
+               cell.checkboxImageView.hidden = YES;
+          }
+          return cell;
+     }
+
+     VLCMovieTVCollectionViewCell *cell = (VLCMovieTVCollectionViewCell *)[collectionView dequeueReusableCellWithReuseIdentifier:VLCMovieTVCollectionViewCellIdentifier forIndexPath:indexPath];
+     [cell configureWithMedia:media];
+     if (_editSelectionActive) {
+          _searchBar.hidden = YES;
+          cell.checkboxImageView.image = [UIImage imageNamed:@"checkboxEmpty"];
+          cell.checkboxImageView.hidden = NO;
+     } else {
+          cell.checkboxImageView.hidden = YES;
+     }
+     return cell;
+}
+
+- (NSInteger)numberOfSectionsInCollectionView:(UICollectionView *)collectionView
+{
+     return 1;
+}
+
+- (UICollectionReusableView *)collectionView:(UICollectionView *)collectionView
+           viewForSupplementaryElementOfKind:(NSString *)kind
+                                 atIndexPath:(NSIndexPath *)indexPath
+{
+     UICollectionReusableView *footer = [collectionView dequeueReusableSupplementaryViewOfKind:kind
+                                                                          withReuseIdentifier:VLCMediaFooterIdentifier
+                                                                                 forIndexPath:indexPath];
+
+     if (footer.subviews.count == 0) {
+          UILabel *cachedMediaLabel = [[UILabel alloc] init];
+          cachedMediaLabel.text = NSLocalizedString(@"CACHED_MEDIA", nil);
+          cachedMediaLabel.font = [UIFont preferredFontForTextStyle:UIFontTextStyleHeadline];
+          cachedMediaLabel.textAlignment = NSTextAlignmentCenter;
+          cachedMediaLabel.translatesAutoresizingMaskIntoConstraints = NO;
+          self.cachedMediaLabel = cachedMediaLabel;
+
+          UILabel *cachedMediaLongLabel = [[UILabel alloc] init];
+          cachedMediaLongLabel.text = NSLocalizedString(@"CACHED_MEDIA_LONG", nil);
+          cachedMediaLongLabel.font = [UIFont preferredFontForTextStyle:UIFontTextStyleBody];
+          cachedMediaLongLabel.textAlignment = NSTextAlignmentCenter;
+          cachedMediaLongLabel.numberOfLines = 0;
+          cachedMediaLongLabel.translatesAutoresizingMaskIntoConstraints = NO;
+          self.cachedMediaLongLabel = cachedMediaLongLabel;
+
+          [self updateTheme];
+
+          [footer addSubview:cachedMediaLabel];
+          [footer addSubview:cachedMediaLongLabel];
+
+          [NSLayoutConstraint activateConstraints:@[
+               [cachedMediaLabel.topAnchor constraintEqualToAnchor:footer.topAnchor constant:20.0],
+               [cachedMediaLabel.leadingAnchor constraintEqualToAnchor:footer.leadingAnchor constant:200.0],
+               [cachedMediaLabel.trailingAnchor constraintEqualToAnchor:footer.trailingAnchor constant:-200.0],
+
+               [cachedMediaLongLabel.topAnchor constraintEqualToAnchor:cachedMediaLabel.bottomAnchor constant:6.0],
+               [cachedMediaLongLabel.leadingAnchor constraintEqualToAnchor:footer.leadingAnchor constant:200.0],
+               [cachedMediaLongLabel.trailingAnchor constraintEqualToAnchor:footer.trailingAnchor constant:-200.0],
+          ]];
+     }
+
+     return footer;
+}
+
+- (NSInteger)collectionView:(UICollectionView *)collectionView numberOfItemsInSection:(NSInteger)section
+{
+     NSUInteger ret;
+
+     if (_didBeginSearching) {
+          ret = _searchedMedia.count;
+     } else {
+          ret = (_isAudio ? _audioModel.files.count : _videoModel.files.count);
+     }
+
+     self.cachedMediaConeImageView.hidden = ret > 0;
+     self.sortButton.hidden = ret <= 1;
+     if (_didBeginSearching) {
+          self.searchBar.hidden = NO;
+          self.editSelectionButton.hidden = YES;
+     } else {
+          self.searchBar.hidden = ret <= 1;
+          self.editSelectionButton.hidden = ret == 0;
+     }
+
+     return ret;
+}
+
+- (void)collectionView:(UICollectionView *)collectionView willDisplayCell:(UICollectionViewCell *)cell forItemAtIndexPath:(NSIndexPath *)indexPath
+{
+     if (_didBeginSearching) {
+          return;
+     }
+     NSInteger totalCount = _isAudio ? _audioModel.files.count : _videoModel.files.count;
+     if (totalCount > 0 && indexPath.row >= totalCount - kVLCPrefetchDistance) {
+          if (_isAudio) {
+               [_modelObserver loadNextAudioPage];
+          } else {
+               [_modelObserver loadNextVideoPage];
+          }
+     }
+}
+
+-(BOOL)collectionView:(UICollectionView *)collectionView shouldUpdateFocusInContext:(UICollectionViewFocusUpdateContext *)context
+{
+     if (self.editing) {
+          return context.nextFocusedIndexPath == nil;
+     }
+     return YES;
+}
+
+- (void)collectionView:(UICollectionView *)collectionView didUpdateFocusInContext:(UICollectionViewFocusUpdateContext *)context withAnimationCoordinator:(UIFocusAnimationCoordinator *)coordinator
+{
+     NSIndexPath *nextPath = context.nextFocusedIndexPath;
+     if (!nextPath) {
+          self.editing = NO;
+     }
+     self.currentlyFocusedIndexPath = nextPath;
+}
+
+#pragma mark - editing
+
+- (NSIndexPath *)indexPathToDelete
+{
+     NSIndexPath *indexPathToDelete = self.currentlyFocusedIndexPath;
+     return indexPathToDelete;
+}
+
+- (NSString *)itemToDelete
+{
+     NSIndexPath *indexPathToDelete = self.indexPathToDelete;
+
+     if (!indexPathToDelete) {
+          return nil;
+     }
+
+     VLCMLMedia *mediaToDelete;
+     if (_didBeginSearching) {
+          mediaToDelete = _searchedMedia[indexPathToDelete.row];
+     } else {
+          mediaToDelete = (_isAudio ? [_audioModel getMediaAt:indexPathToDelete.row] : [_videoModel getMediaAt:indexPathToDelete.row]);
+     }
+     return mediaToDelete.title;
+}
+
+- (void)setEditing:(BOOL)editing
+{
+     [super setEditing:editing];
+
+     UICollectionViewCell *focusedCell = [self.cachedMediaCollectionView cellForItemAtIndexPath:self.currentlyFocusedIndexPath];
+     if (editing) {
+          [focusedCell.layer addAnimation:[CAAnimation vlc_wiggleAnimationwithSoftMode:NO]
+                                   forKey:VLCWiggleAnimationKey];
+     } else {
+          [focusedCell.layer removeAnimationForKey:VLCWiggleAnimationKey];
+     }
+}
+
+- (void)deleteFileAtIndex:(NSIndexPath *)indexPathToDelete
+{
+     [super deleteFileAtIndex:indexPathToDelete];
+     if (!indexPathToDelete) {
+          return;
+     }
+
+     VLCMLMedia *mediaToDestroy;
+     if (_didBeginSearching) {
+          mediaToDestroy = _searchedMedia[indexPathToDelete.row];
+          [_searchedMedia removeObjectAtIndex:indexPathToDelete.row];
+          if (_searchedMedia.count == 0) {
+               _didBeginSearching = NO;
+               _searchBar.text = @"";
+          }
+     } else {
+          mediaToDestroy = (_isAudio ? [_audioModel getMediaAt:indexPathToDelete.row] : [_videoModel getMediaAt:indexPathToDelete.row]);
+     }
+     [mediaToDestroy deleteMainFile];
+     self.editing = NO;
+     [self.cachedMediaCollectionView reloadData];
+}
+
+- (void)renameFileAtIndex:(NSIndexPath *)indexPathToRename
+{
+     VLCMLMedia *mediaToRename;
+     if (_didBeginSearching) {
+          mediaToRename = _searchedMedia[indexPathToRename.row];
+     } else {
+          mediaToRename = (_isAudio ? [_audioModel getMediaAt:indexPathToRename.row] : [_videoModel getMediaAt:indexPathToRename.row]);
+     }
+     NSString *currentTitle = mediaToRename.title;
+
+     NSString *alertTitle = [NSString stringWithFormat:NSLocalizedString(@"RENAME_MEDIA_TO", nil), currentTitle];
+     UIAlertController *renameAlert = [UIAlertController alertControllerWithTitle:alertTitle message:nil preferredStyle:UIAlertControllerStyleAlert];
+
+     __block NSString *newName = nil;
+
+     [renameAlert addTextFieldWithConfigurationHandler:^(UITextField * _Nonnull textField) {
+          textField.text = currentTitle;
+          textField.textColor = [UIColor blackColor];
+          textField.keyboardAppearance = UIKeyboardAppearanceLight;
+     }];
+
+     UIAlertAction *cancelAction = [UIAlertAction actionWithTitle:NSLocalizedString(@"BUTTON_CANCEL", nil) style:UIAlertActionStyleCancel
+                                                          handler:nil];
+
+     UIAlertAction *confirmAction = [UIAlertAction actionWithTitle:NSLocalizedString(@"BUTTON_DONE", nil) style: UIAlertActionStyleDefault handler:^(UIAlertAction * _Nonnull action) {
+          UITextField *textField = renameAlert.textFields.firstObject;
+          newName = textField.text;
+
+          if (![newName isEqualToString:@""]) {
+               [mediaToRename updateTitle:newName];
+               [self.cachedMediaCollectionView reloadData];
+          }
+     }];
+
+     [renameAlert addAction:confirmAction];
+     [renameAlert addAction:cancelAction];
+
+     [self presentViewController:renameAlert animated:YES completion:nil];
+}
+
+#pragma mark - collection view delegate
+
+- (void)collectionView:(UICollectionView *)collectionView didSelectItemAtIndexPath:(NSIndexPath *)indexPath
+{
+     VLCMLMedia *mediaToPlay;
+     NSArray<VLCMLMedia *> *collection;
+
+     if (_didBeginSearching) {
+          mediaToPlay = _searchedMedia[indexPath.row];
+          [[VLCPlaybackService sharedInstance] playMedia:mediaToPlay];
+          return;
+     }
+
+     if (_isAudio) {
+          mediaToPlay = [_audioModel getMediaAt: indexPath.row];
+          collection = _audioModel.files;
+     } else {
+          mediaToPlay = [_videoModel getMediaAt: indexPath.row];
+          collection = _videoModel.files;
+     }
+
+     if (_editSelectionActive) {
+          VLCMovieTVCollectionViewCell *selectedCell = (VLCMovieTVCollectionViewCell *)[collectionView cellForItemAtIndexPath:indexPath];
+          [selectedCell toggleCheckbox];
+          if (selectedCell.selectedPreviously) {
+               [self.cellToMediaMap setObject: collection[indexPath.row] forKey: selectedCell];
+          } else {
+               [self.cellToMediaMap removeObjectForKey:selectedCell];
+          }
+          return;
+     }
+
+     if ([[NSUserDefaults standardUserDefaults] boolForKey:kVLCAutomaticallyPlayNextItem]) {
+          [[VLCPlaybackService sharedInstance] playMediaAtIndex:indexPath.row fromCollection:collection];
+     } else {
+          [[VLCPlaybackService sharedInstance] playMedia:mediaToPlay];
+     }
+}
+
+
+- (void)reloadMediaCollectionView:(NSNotification *)notification
+{
+     [self.cachedMediaCollectionView reloadData];
+}
+
+#pragma mark -  media library delegate
+
+-(void)refreshCollection
+{
+     dispatch_async(dispatch_get_main_queue(), ^{
+          [self.cachedMediaCollectionView reloadData];
+     });
+}
+- (IBAction)toggleContentMode:(id)sender
+{
+     _isAudio = (self.contentSwitchSegmentedControl.selectedSegmentIndex == 1);
+     if (_isAudio) {
+          _sortHandler = [[SortingHandler alloc] initWithAudioModel:_audioModel];
+     } else {
+          _sortHandler = [[SortingHandler alloc] initWithVideoModel:_videoModel];
+     }
+
+     _didBeginSearching = NO;
+     _searchBar.text = @"";
+     [_searchedMedia removeAllObjects];
+
+     UICollectionViewFlowLayout *flowLayout = (UICollectionViewFlowLayout *)self.cachedMediaCollectionView.collectionViewLayout;
+     if (_isAudio) {
+          flowLayout.itemSize = [VLCMediaTVCollectionViewCell cellSize];
+          flowLayout.minimumInteritemSpacing = 48.0;
+          flowLayout.minimumLineSpacing = 60.0;
+     } else {
+          flowLayout.itemSize = [VLCMovieTVCollectionViewCell cellSize];
+          flowLayout.minimumLineSpacing = 80.0;
+     }
+
+     [self.cachedMediaCollectionView reloadData];
+}
+
+#pragma mark - search bar delegate
+
+- (void)textFieldDidEndEditing:(UITextField *)textField {
+     NSString *searchString = textField.text;
+     NSMutableArray<VLCMLMedia *> *searchResults = [NSMutableArray array];
+
+     if ([textField.text isEqualToString:@""]) {
+          self.didBeginSearching = NO;
+          self.sortButton.hidden = NO;
+          self.editSelectionButton.hidden = YES;
+          searchResults = [NSMutableArray arrayWithArray:_searchedMedia];
+     } else {
+          self.didBeginSearching = YES;
+          self.sortButton.hidden = YES;
+          self.editSelectionButton.hidden = YES;
+
+          NSArray<VLCMLMedia *> *sourceArray = _isAudio ? _audioModel.files : _videoModel.files;
+
+          for (VLCMLMedia *media in sourceArray) {
+               if ([media contains:searchString]) {
+                    [searchResults addObject:media];
+               }
+          }
+     }
+     // Update the search results array and reload the collection view
+     _searchedMedia = [NSMutableArray arrayWithArray:searchResults];
+     [self.cachedMediaCollectionView reloadData];
+}
+
+@end

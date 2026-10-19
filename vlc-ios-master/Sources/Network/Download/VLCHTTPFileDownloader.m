@@ -1,0 +1,270 @@
+/*****************************************************************************
+ * VLCHTTPFileDownloader.m
+ * VLC for iOS
+ *****************************************************************************
+ * Copyright (c) 2013-2026 VideoLAN. All rights reserved.
+ * $Id$
+ *
+ * Authors: Felix Paul Kühne <fkuehne # videolan.org>
+ *          Pierre Sagaspe <pierre.sagaspe # me.com>
+ *
+ * Refer to the COPYING file of the official project for license.
+ *****************************************************************************/
+
+#import "VLCHTTPFileDownloader.h"
+#import "VLCActivityManager.h"
+#import "VLCURLAuthenticationHandler.h"
+#import "VLC-Swift.h"
+
+@interface VLCHTTPFileDownloader () <NSURLSessionDelegate>
+{
+    NSURL *_url;
+    NSString *_fileName;
+    NSURL *_fileURL;
+
+    NSURLSession *_urlSession;
+    NSURLSessionTask *_urlSessionTask;
+    VLCURLAuthenticationHandler *_authenticationHandler;
+    dispatch_queue_t _downloadsAccessQueue;
+
+    BOOL _downloadInProgress;
+}
+@end
+
+@implementation VLCHTTPFileDownloader
+
+- (instancetype)init
+{
+    if (self = [super init]) {
+        _urlSession = [NSURLSession sessionWithConfiguration:[NSURLSessionConfiguration defaultSessionConfiguration]
+                                                    delegate:self
+                                               delegateQueue:nil];
+        _authenticationHandler = [[VLCURLAuthenticationHandler alloc] init];
+        _downloadsAccessQueue = dispatch_queue_create("VLCHTTPFileDownloader.downloadsQueue", DISPATCH_QUEUE_SERIAL);
+    }
+    return self;
+}
+
+- (NSString *)downloadLocationPath
+{
+    return _fileURL.path;
+}
+
+- (BOOL)downloadInProgress
+{
+    return _downloadInProgress;
+}
+
+- (NSMutableURLRequest *)mutableURLRequest
+{
+    NSMutableURLRequest *theRequest = [NSMutableURLRequest requestWithURL:_url];
+    [theRequest addValue:[NSString stringWithFormat:@"Mozilla/5.0 (%@; CPU OS 7_0 like Mac OS X) AppleWebKit/537.51.1 (KHTML, like Gecko) Version/%@ Safari/9537.53 VLC for iOS/%@",
+#if TARGET_OS_IOS
+                          UI_USER_INTERFACE_IDIOM() == UIUserInterfaceIdiomPad ? @"iPad" : @"iPhone",
+#elif TARGET_OS_TV
+                          @"Apple TV",
+#else
+                          @"vision Pro",
+#endif
+                          [[UIDevice currentDevice] systemVersion],
+                          [[NSBundle mainBundle] objectForInfoDictionaryKey:@"CFBundleShortVersionString"]]
+      forHTTPHeaderField:@"User-Agent"];
+    return theRequest;
+}
+
+- (NSString *)downloadFileFromVLCMedia:(VLCMedia *)media withName:(NSString *)name expectedDownloadSize:(unsigned long long)expectedDownloadSize
+{
+    NSArray *searchPaths = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES);
+    NSString *libraryPath = [searchPaths firstObject];
+
+    _url = media.url;
+    _fileName = name;
+    _fileURL = [NSURL fileURLWithPath:[libraryPath stringByAppendingPathComponent:name]];
+
+    NSString *identifier = [[NSUUID UUID] UUIDString];
+
+    _urlSessionTask = [_urlSession downloadTaskWithRequest:[self mutableURLRequest]];
+    _urlSessionTask.taskDescription = identifier;
+    [_urlSessionTask resume];
+
+    if (!_urlSessionTask) {
+        APLog(@"failed to establish connection");
+        return nil;
+    } else {
+        VLCActivityManager *activityManager = [VLCActivityManager defaultManager];
+        [activityManager networkActivityStarted];
+        [activityManager disableIdleTimer];
+    }
+
+    _downloadInProgress = YES;
+    return identifier;
+}
+
+- (void)URLSession:(NSURLSession *)session
+              task:(NSURLSessionTask *)task
+didReceiveChallenge:(NSURLAuthenticationChallenge *)challenge
+ completionHandler:(void (^)(NSURLSessionAuthChallengeDisposition, NSURLCredential * _Nullable))completionHandler
+{
+    [_authenticationHandler handleChallenge:challenge forURL:_url completionHandler:completionHandler];
+}
+
+- (void)URLSession:(NSURLSession *)session
+              task:(NSURLSessionTask *)task
+willPerformHTTPRedirection:(NSHTTPURLResponse *)response
+        newRequest:(NSURLRequest *)request
+ completionHandler:(void (^)(NSURLRequest * _Nullable))completionHandler
+{
+    NSURL *newUrl = request.URL;
+    NSFileManager *fileManager = [NSFileManager defaultManager];
+
+    if ([fileManager fileExistsAtPath:[_fileURL path]])
+        [fileManager removeItemAtURL:_fileURL error:nil];
+
+    NSArray *searchPaths = NSSearchPathForDirectoriesInDomains(NSCachesDirectory, NSUserDomainMask, YES);
+    NSString *basePath = [[searchPaths firstObject] stringByAppendingPathComponent:kVLCHTTPUploadDirectory];
+    _fileName = [[newUrl lastPathComponent] stringByRemovingPercentEncoding];
+    _fileURL = [NSURL fileURLWithPath:[basePath stringByAppendingPathComponent:_fileName]];
+
+    if (![fileManager fileExistsAtPath:basePath]) {
+        NSError *error;
+        [fileManager createDirectoryAtPath:basePath withIntermediateDirectories:YES attributes:nil error:&error];
+        if (error != nil) {
+            APLog(@"Creating upload directory failed: %@", error.localizedDescription);
+        }
+    }
+    completionHandler(nil);
+}
+
+- (void)URLSession:(NSURLSession *)session
+      downloadTask:(NSURLSessionDownloadTask *)downloadTask
+      didWriteData:(int64_t)bytesWritten
+ totalBytesWritten:(int64_t)totalBytesWritten
+totalBytesExpectedToWrite:(int64_t)totalBytesExpectedToWrite {
+    if ([self.delegate respondsToSelector:@selector(mediaFileDownloader:didUpdateReceivedBytes:expectedBytes:)]) {
+        dispatch_async(dispatch_get_main_queue(), ^{
+            [self.delegate mediaFileDownloader:self
+                        didUpdateReceivedBytes:totalBytesWritten
+                                 expectedBytes:totalBytesExpectedToWrite];
+        });
+    }
+}
+
+- (void)URLSession:(NSURLSession *)session downloadTask:(NSURLSessionDownloadTask *)downloadTask didFinishDownloadingToURL:(NSURL *)location
+{
+    /* check Content-Disposition header for a server-provided filename */
+    if ([downloadTask.response isKindOfClass:[NSHTTPURLResponse class]]) {
+        NSHTTPURLResponse *httpResponse = (NSHTTPURLResponse *)downloadTask.response;
+        if (httpResponse.statusCode >= 400) {
+            return;
+        }
+
+        NSString *suggestedFilename = [self filenameFromContentDisposition:httpResponse.allHeaderFields[@"Content-Disposition"]];
+        if (suggestedFilename.length > 0) {
+            NSString *directory = [_fileURL.path stringByDeletingLastPathComponent];
+            _fileURL = [NSURL fileURLWithPath:[directory stringByAppendingPathComponent:suggestedFilename]];
+        }
+    }
+
+    NSFileManager *fileManager = [NSFileManager defaultManager];
+    if (![fileManager fileExistsAtPath:[_fileURL path]]) {
+        [fileManager copyItemAtURL:location toURL:_fileURL error:nil];
+    }
+}
+
+- (NSString *)filenameFromContentDisposition:(NSString *)contentDisposition
+{
+    if (!contentDisposition)
+        return nil;
+
+    /* try filename*= (RFC 5987 extended notation) first, then filename= */
+    NSArray<NSString *> *patterns = @[@"filename\\*=(?:UTF-8''|utf-8'')([^;]+)",
+                                      @"filename=\"([^\"]+)\"",
+                                      @"filename=([^;\\s]+)"];
+    for (NSString *pattern in patterns) {
+        NSRegularExpression *regex = [NSRegularExpression regularExpressionWithPattern:pattern
+                                                                              options:NSRegularExpressionCaseInsensitive
+                                                                                error:nil];
+        NSTextCheckingResult *match = [regex firstMatchInString:contentDisposition
+                                                        options:0
+                                                          range:NSMakeRange(0, contentDisposition.length)];
+        if (match && match.numberOfRanges > 1) {
+            NSString *filename = [contentDisposition substringWithRange:[match rangeAtIndex:1]];
+            filename = [filename stringByRemovingPercentEncoding];
+            filename = [filename stringByReplacingOccurrencesOfString:@"/" withString:@"_"];
+            if (filename.length > 0)
+                return filename;
+        }
+    }
+    return nil;
+}
+
+- (void)URLSession:(NSURLSession *)session task:(NSURLSessionTask *)task didCompleteWithError:(NSError *)error
+{
+    if (error.code == NSURLErrorCancelled) {
+        APLog(@"http file download canceled");
+        return;
+    }
+
+    if (error) {
+        APLog(@"http file download failed (%li)", (long)error.code);
+        [self _failWithDescription:error.localizedDescription];
+        return;
+    }
+
+    if ([task.response isKindOfClass:[NSHTTPURLResponse class]]) {
+        NSInteger statusCode = ((NSHTTPURLResponse *)task.response).statusCode;
+        if (statusCode >= 400) {
+            APLog(@"http file download failed with status code %li", (long)statusCode);
+            [self _failWithDescription:[NSHTTPURLResponse localizedStringForStatusCode:statusCode].capitalizedString];
+            return;
+        }
+    }
+
+    APLog(@"http file download complete");
+    [self _downloadSucceeded];
+}
+
+- (void)cancelDownload
+{
+    [_urlSessionTask cancel];
+    /* remove partially downloaded content */
+    NSFileManager *fileManager = [NSFileManager defaultManager];
+    if ([fileManager fileExistsAtPath:_fileURL.path])
+        [fileManager removeItemAtURL:_fileURL error:nil];
+
+    [self _failWithDescription:NSLocalizedString(@"HTTP_DOWNLOAD_CANCELLED", nil)];
+}
+
+- (void)_downloadSucceeded
+{
+    VLCActivityManager *activityManager = [VLCActivityManager defaultManager];
+    [activityManager networkActivityStopped];
+    [activityManager activateIdleTimer];
+
+#if TARGET_OS_IOS
+    dispatch_async(dispatch_get_main_queue(), ^{
+        // FIXME: Replace notifications by cleaner observers
+        [[NSNotificationCenter defaultCenter] postNotificationName:NSNotification.VLCNewFileAddedNotification
+                                                            object:self];
+    });
+#endif
+
+    _downloadInProgress = NO;
+    dispatch_async(dispatch_get_main_queue(), ^{
+        [self.delegate mediaFileDownloaderDidFinish:self];
+    });
+}
+
+- (void)_failWithDescription:(NSString *)description
+{
+    VLCActivityManager *activityManager = [VLCActivityManager defaultManager];
+    [activityManager networkActivityStopped];
+    [activityManager activateIdleTimer];
+
+    _downloadInProgress = NO;
+    dispatch_async(dispatch_get_main_queue(), ^{
+        [self.delegate mediaFileDownloader:self didFailWithDescription:description];
+    });
+}
+
+@end

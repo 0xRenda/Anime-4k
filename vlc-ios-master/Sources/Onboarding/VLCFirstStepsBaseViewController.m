@@ -1,0 +1,310 @@
+/*****************************************************************************
+ * VLCFirstStepsBaseViewController
+ * VLC for iOS
+ *****************************************************************************
+ * Copyright (c) 2020-2022 VideoLAN. All rights reserved.
+ * $Id$
+ *
+ * Authors: Pavel Akhrameev <p.akhrameev@gmail.com>
+ *
+ * Refer to the COPYING file of the official project for license.
+ *****************************************************************************/
+
+#import "VLCFirstStepsBaseViewController.h"
+#if TARGET_OS_IOS
+#import "VLCFirstStepsiTunesSyncViewController.h"
+#import "VLCFirstStepsCloudViewController.h"
+#endif
+#import "VLCFirstStepsDonateViewController.h"
+#import "VLCFirstStepsWifiSharingViewController.h"
+#import "VLCDonationNavigationController.h"
+#import "VLC-Swift.h"
+
+@implementation VLCFirstStepsBaseViewController
+
+- (VLCFirstStepsPage)page
+{
+    return self.class.page;
+}
+
+- (void)viewDidLoad
+{
+    [super viewDidLoad];
+
+    UIFont *titleFont = [UIFont preferredFontForTextStyle:UIFontTextStyleLargeTitle];
+    self.pageTitleLabel.font = [UIFont systemFontOfSize:titleFont.pointSize weight:UIFontWeightBold];
+
+    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(updateTheme) name:kVLCThemeDidChangeNotification object:nil];
+    [self setupPage];
+    [self updatePageTitle];
+    [self updateTheme];
+}
+
+- (void)viewWillAppear:(BOOL)animated
+{
+    [super viewWillAppear:animated];
+    [self setupPage];
+    [self updateTheme];
+}
+
+- (void)traitCollectionDidChange:(UITraitCollection *)previousTraitCollection
+{
+    [super traitCollectionDidChange:previousTraitCollection];
+    [self setupPage];
+}
+
+- (void)viewDidLayoutSubviews
+{
+    [super viewDidLayoutSubviews];
+    if (self.isCompactHeight) {
+        return;
+    }
+    [self.pageTitleContainer layoutIfNeeded];
+    [self.bottomView layoutIfNeeded];
+    [self updateHeightConstraints];
+}
+
+- (BOOL)isCompactHeight
+{
+    return (self.traitCollection.verticalSizeClass == UIUserInterfaceSizeClassCompact);
+}
+
+- (void)updateTheme
+{
+    ColorPalette *colors = PresentationTheme.current.colors;
+    self.pageTitleLabel.textColor = colors.navigationbarTextColor;
+    self.titleLabel.textColor = colors.cellTextColor;
+    self.descriptionLabel.textColor = colors.cellDetailTextColor;
+    self.view.backgroundColor = colors.background;
+    self.bottomView.backgroundColor = self.view.backgroundColor;
+    self.pageTitleLabel.backgroundColor = self.view.backgroundColor;
+    self.pageTitleLabel.superview.backgroundColor = self.view.backgroundColor;
+    [self configurePage];
+}
+
+- (void)setupPage
+{
+    [self configurePage];
+    self.pageTitleContainer.hidden = self.isCompactHeight;
+
+    UIView *central = self.centralView;
+    [central removeFromSuperview];
+    [self.view addSubview:central];
+    UIView *bottom = self.bottomView;
+    [bottom removeFromSuperview];
+    [self.view addSubview:bottom];
+
+    UILayoutGuide *guide = self.view.safeAreaLayoutGuide;
+
+    [NSLayoutConstraint deactivateConstraints: self.labelHeightConstraints];
+    [NSLayoutConstraint activateConstraints: self.isCompactHeight ? @[
+        [bottom.leadingAnchor constraintEqualToAnchor:guide.leadingAnchor],
+        [bottom.bottomAnchor constraintGreaterThanOrEqualToAnchor:guide.bottomAnchor],
+        [bottom.widthAnchor constraintEqualToAnchor:guide.heightAnchor],
+        [bottom.topAnchor constraintEqualToAnchor:guide.topAnchor],
+        [central.leadingAnchor constraintEqualToAnchor:bottom.trailingAnchor],
+        [central.bottomAnchor constraintEqualToAnchor:bottom.bottomAnchor],
+        [central.topAnchor constraintEqualToAnchor:guide.topAnchor],
+        [central.trailingAnchor constraintEqualToAnchor:guide.trailingAnchor]
+    ] : @[
+        [bottom.leadingAnchor constraintEqualToAnchor:guide.leadingAnchor],
+        [bottom.bottomAnchor constraintEqualToAnchor:guide.bottomAnchor],
+        [bottom.trailingAnchor constraintEqualToAnchor:guide.trailingAnchor],
+        [central.leadingAnchor constraintEqualToAnchor:bottom.leadingAnchor],
+        [central.bottomAnchor constraintEqualToAnchor:bottom.topAnchor],
+        [central.trailingAnchor constraintEqualToAnchor:bottom.trailingAnchor],
+        [central.topAnchor constraintEqualToAnchor:self.pageTitleContainer.bottomAnchor],
+    ]];
+
+    if (!self.isCompactHeight) {
+        [NSLayoutConstraint activateConstraints: self.labelHeightConstraints];
+    }
+    [self configureCentral];
+}
+
+- (void)configureCentral
+{
+    [self.centralParts enumerateObjectsUsingBlock:^(UIView *part, NSUInteger idx, BOOL * _Nonnull stop) {
+        part.hidden = idx != self.page;
+        if (idx == self.page) {
+            for (UIView *view in self.centralView.subviews) {
+                [view removeFromSuperview];
+            }
+            UIGraphicsBeginImageContext(part.frame.size);
+            [part.layer renderInContext:UIGraphicsGetCurrentContext()];
+            UIImage *img = UIGraphicsGetImageFromCurrentImageContext();
+            UIImageView *imageView = [[UIImageView alloc] initWithImage:img];
+            UIGraphicsEndImageContext();
+            [self.centralView addSubview:imageView];
+            imageView.translatesAutoresizingMaskIntoConstraints = NO;
+            [NSLayoutConstraint activateConstraints: [self imageViewConstraints:imageView]];
+        }
+    }];
+}
+
+- (void)configurePage
+{
+    self.pageTitleLabel.text = [self.class pageTitleText];
+    self.titleLabel.text = [self.class titleText];
+    self.descriptionLabel.text = [self.class descriptionText];
+    [self updatePageTitle];
+
+    if (self.page == VLCFirstStepsDonate) {
+        [self setupLabelForDonation:self.titleLabel];
+        [self setupLabelForDonation:self.descriptionLabel];
+    } else {
+        ColorPalette *colors = PresentationTheme.current.colors;
+        self.titleLabel.userInteractionEnabled = NO;
+        self.titleLabel.textColor = colors.cellTextColor;
+        self.descriptionLabel.userInteractionEnabled = NO;
+        self.descriptionLabel.textColor = colors.cellDetailTextColor;
+    }
+}
+
+- (void)setupLabelForDonation:(UILabel *)label
+{
+    label.userInteractionEnabled = YES;
+    label.textColor = PresentationTheme.current.colors.orangeUI;
+    label.highlightedTextColor = PresentationTheme.current.colors.orangeDarkAccent;
+    UILongPressGestureRecognizer *pressGesture = [[UILongPressGestureRecognizer alloc]
+                                                  initWithTarget:self
+                                                  action:@selector(didPressLabelWithGesture:)];
+    pressGesture.minimumPressDuration = 0.;
+    [label addGestureRecognizer:pressGesture];
+}
+
+- (void)didPressLabelWithGesture:(UILongPressGestureRecognizer *)gesture
+{
+    UILabel *label = (UILabel *)gesture.view;
+    switch (gesture.state) {
+        case UIGestureRecognizerStateBegan:
+            label.highlighted = YES;
+            break;
+        case UIGestureRecognizerStateEnded:
+            label.highlighted = NO;
+            if (CGRectContainsPoint(label.bounds, [gesture locationInView:label])) {
+                [self presentDonationFromView:label];
+            }
+            break;
+        case UIGestureRecognizerStateCancelled:
+        case UIGestureRecognizerStateFailed:
+            label.highlighted = NO;
+            break;
+        default:
+            break;
+    }
+}
+
+- (void)presentDonationFromView:(UIView *)sourceView
+{
+    UIViewController *donationVC = [[VLCDonationViewController alloc] initWithNibName:@"VLCDonationViewController" bundle:nil];
+    UINavigationController *donationNC = [[VLCDonationNavigationController alloc] initWithRootViewController:donationVC];
+#if TARGET_OS_IOS
+    if (UI_USER_INTERFACE_IDIOM() == UIUserInterfaceIdiomPad) {
+        donationNC.modalPresentationStyle = UIModalPresentationPopover;
+        donationNC.popoverPresentationController.sourceView = sourceView;
+    } else {
+        donationNC.modalPresentationStyle = UIModalPresentationFullScreen;
+    }
+#else
+    donationNC.modalPresentationStyle = UIModalPresentationFullScreen;
+#endif
+    [self presentViewController:donationNC animated:YES completion:nil];
+}
+
+- (void)updatePageTitle
+{
+    self.title = self.isCompactHeight ? [self.class pageTitleText] : @"";
+}
+
+- (void)updateHeightConstraints
+{
+    self.pageTitleLabelHeightConstraint.constant = [self heightForLabel:self.pageTitleLabel
+                                                                  texts:self.class.pageTitleTexts];
+    self.titleLabelHeightConstraint.constant = [self heightForLabel:self.titleLabel
+                                                              texts:self.class.titleTexts];
+    self.descriptionLabelHeightConstraint.constant = [self heightForLabel:self.descriptionLabel
+                                                                    texts:self.class.descriptionTexts];
+}
+
+- (CGFloat)heightForLabel:(UILabel *)label texts:(NSArray<NSString *> *)texts
+{
+    CGFloat height = 0;
+    if (!label) {
+        return height;
+    }
+    for (NSString *text in texts) {
+        height = MAX(height, CGRectIntegral([text boundingRectWithSize:CGSizeMake(label.frame.size.width, CGFLOAT_MAX)
+                                                               options:NSStringDrawingUsesLineFragmentOrigin
+                                                            attributes:@{
+                                                                NSFontAttributeName: label.font
+                                                            }
+                                                               context:nil]).size.height);
+    }
+    return height;
+}
+
+- (NSArray <NSLayoutConstraint *> *)imageViewConstraints:(UIImageView *)imageView
+{
+    UIImage *img = imageView.image;
+    return @[
+        [imageView.widthAnchor constraintEqualToAnchor:imageView.heightAnchor multiplier:img.size.width / img.size.height],
+        [imageView.leadingAnchor constraintGreaterThanOrEqualToAnchor:self.centralView.leadingAnchor],
+        [imageView.centerXAnchor constraintEqualToAnchor:self.centralView.centerXAnchor],
+        [imageView.topAnchor constraintGreaterThanOrEqualToAnchor:self.centralView.topAnchor],
+        [imageView.bottomAnchor constraintEqualToAnchor:self.centralView.bottomAnchor],
+    ];
+}
+
+#pragma mark - Class methods
+
++ (VLCFirstStepsPage)page
+{
+    NSAssert(NO, @"page should be overriden in subclasses");
+    return VLCFirstStepsPageCount;
+}
+
++ (NSString *)pageTitleText
+{
+    NSAssert(NO, @"pageTitleText should be overriden in subclasses");
+    return @"";
+}
+
++ (NSString *)titleText
+{
+    NSAssert(NO, @"titleText should be overriden in subclasses");
+    return @"";
+}
+
++ (NSString *)descriptionText
+{
+    NSAssert(NO, @"descriptionText should be overriden in subclasses");
+    return @"";
+}
+
++ (NSArray *)pageClasses
+{
+    return @[
+#if TARGET_OS_IOS
+        [VLCFirstStepsiTunesSyncViewController class],
+        [VLCFirstStepsCloudViewController class],
+#endif
+        [VLCFirstStepsWifiSharingViewController class],
+        [VLCFirstStepsDonateViewController class],
+    ];
+}
+
++ (NSArray <NSString *> *)pageTitleTexts
+{
+    return [self.pageClasses valueForKeyPath: NSStringFromSelector(@selector(pageTitleText))];
+}
++ (NSArray <NSString *> *)titleTexts
+{
+    return [self.pageClasses valueForKeyPath: NSStringFromSelector(@selector(titleText))];
+}
++ (NSArray <NSString *> *)descriptionTexts
+{
+    return [self.pageClasses valueForKeyPath: NSStringFromSelector(@selector(descriptionText))];
+}
+
+@end

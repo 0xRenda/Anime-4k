@@ -1,0 +1,46 @@
+/*****************************************************************************
+ * Prefix header for all source files of the 'vlc-ios' target
+ * VLC for iOS
+ *****************************************************************************
+ * Copyright (c) 2013-2026 VideoLAN. All rights reserved.
+ * $Id$
+ *
+ * Authors: Felix Paul Kühne <fkuehne # videolan.org>
+ *
+ * Refer to the COPYING file of the official project for license.
+ *****************************************************************************/
+
+#import <Availability.h>
+
+#ifdef __OBJC__
+    #import <UIKit/UIKit.h>
+    #import <Foundation/Foundation.h>
+#endif
+
+#import <VLCKit/VLCKit.h>
+#import <VLCKit/vlc/libvlc_version.h>
+
+#import "VLCConstants.h"
+#import "UIBarButtonItem+Theme.h"
+#import "UIViewController+VLCAlert.h"
+
+#ifndef NDEBUG
+#define APLog(format, ...) NSLog(format, ## __VA_ARGS__)
+#else
+#define APLog(format, ...)
+#endif
+
+#define MEDIA_PLAYBACK_DEBUG 0
+#define MEDIA_DISCOVERY_DEBUG 0
+#define MEDIA_DOWNLOAD_DEBUG 0
+#define WIFI_SHARING_DEBUG 0
+
+// work-around to fix compilation on older Xcode releases
+#if defined(TARGET_OS_VISION) && TARGET_OS_VISION
+#define MIN_VISIONOS 1.0
+#define VISIONOS_API_AVAILABLE , visionos(MIN_VISIONOS)
+#define VISIONOS_AVAILABLE , visionOS MIN_VISIONOS
+#else
+#define VISIONOS_API_AVAILABLE
+#define VISIONOS_AVAILABLE
+#endif

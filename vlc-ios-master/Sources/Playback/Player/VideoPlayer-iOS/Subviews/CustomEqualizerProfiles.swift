@@ -1,0 +1,76 @@
+/*****************************************************************************
+* CustomEqualizerProfiles.swift
+*
+* Copyright © 2020 VLC authors and VideoLAN
+*
+* Authors: Diogo Simao Marques <dogo@videolabs.io>
+*
+* Refer to the COPYING file of the official project for license.
+*****************************************************************************/
+
+import UIKit
+
+// MARK: - CustomEqualizerProfile
+
+@objcMembers class CustomEqualizerProfile: NSObject, NSCoding {
+    var name: String
+    var preAmpLevel: Float
+    var frequencies: [Float]
+
+    init(name: String, preAmpLevel: Float, frequencies: [Float]) {
+        self.name = name
+        self.preAmpLevel = preAmpLevel
+        self.frequencies = frequencies
+    }
+
+    required init?(coder: NSCoder) {
+        guard let name = coder.decodeObject(forKey: "name") as? String,
+              let frequencies = coder.decodeObject(forKey: "frequencies") as? [Float] else {
+            self.name = ""
+            self.preAmpLevel = 6.0
+            self.frequencies = []
+            return
+        }
+
+        self.name = name
+        self.preAmpLevel = coder.decodeFloat(forKey: "preAmpLevel")
+        self.frequencies = frequencies
+    }
+
+    func encode(with coder: NSCoder) {
+        coder.encode(name, forKey: "name")
+        coder.encode(preAmpLevel, forKey: "preAmpLevel")
+        coder.encode(frequencies, forKey: "frequencies")
+    }
+}
+
+// MARK: - CustomEqualizerProfiles
+
+@objcMembers class CustomEqualizerProfiles: NSObject, NSCoding {
+    var profiles: [CustomEqualizerProfile]
+
+    required init?(coder: NSCoder) {
+        guard let customProfiles = coder.decodeObject(forKey: "profiles") as? [CustomEqualizerProfile] else {
+            self.profiles = []
+            return
+        }
+
+        self.profiles = customProfiles
+    }
+
+    init(profiles: [CustomEqualizerProfile]) {
+        self.profiles = profiles
+    }
+
+    func encode(with coder: NSCoder) {
+        coder.encode(self.profiles, forKey: "profiles")
+    }
+
+    static func unarchive(from data: Data) -> CustomEqualizerProfiles? {
+        guard let unarchiver = try? NSKeyedUnarchiver(forReadingFrom: data) else {
+            return nil
+        }
+        unarchiver.requiresSecureCoding = false
+        return unarchiver.decodeObject(forKey: "root") as? CustomEqualizerProfiles
+    }
+}

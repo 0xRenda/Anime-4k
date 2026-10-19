@@ -1,0 +1,14 @@
+{
+  "images": [
+    {
+      "filename": "Roxy.png",
+      "idiom": "universal",
+      "platform": "ios",
+      "size": "1024x1024"
+    }
+  ],
+  "info": {
+    "author": "Roxy Player",
+    "version": 1
+  }
+}

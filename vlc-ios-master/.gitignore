@@ -1,0 +1,24 @@
+# Xcode
+*.mode*
+*.pbxuser
+xcuserdata
+*.xccheckout
+
+# macOS
+.DS_Store
+
+# CocoaPods
+Pods
+
+# Private Constants
+0001-privateConstants.patch
+
+# Others
+build
+DerivedData
+SourcePackages
+External
+ImportedSources
+!Makefile
+.idea/
+.*.sw[nop]

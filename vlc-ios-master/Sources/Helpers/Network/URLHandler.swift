@@ -1,0 +1,554 @@
+/*****************************************************************************
+ * URLHandler.swift
+ * VLC for iOS
+ *****************************************************************************
+ * Copyright (c) 2018, 2021 VideoLAN. All rights reserved.
+ * $Id$
+ *
+ * Authors: Carola Nitz <caro # videolan.org>
+ *        Felix Paul Kühne <fkuehne # videolan.org>
+ *
+ * Refer to the COPYING file of the official project for license.
+ *****************************************************************************/
+
+import Foundation
+import UIKit
+#if os(iOS)
+import GoogleSignIn
+#endif
+
+enum VLCXCallbackType {
+    case url
+    case sub
+    case filename
+    case xSuccess
+    case xError
+    case loop
+    case shuffle
+    case undefined
+}
+
+@objc public protocol VLCURLHandler {
+    var movieURL: URL? { get set }
+    var subURL: URL? { get set }
+    var successCallback: URL? { get set }
+    var errorCallback: URL? { get set }
+    var fileName: String? { get set }
+    var loop: Bool { get set }
+    var shuffle: Bool { get set }
+
+    func canHandleOpen(url: URL, options: [UIApplication.OpenURLOptionsKey: AnyObject]) -> Bool
+    func performOpen(url: URL, options: [UIApplication.OpenURLOptionsKey: AnyObject]) -> Bool
+}
+
+extension VLCURLHandler {
+    func matchCallback(key: String) -> VLCXCallbackType {
+        switch key {
+        case "url":
+            return .url
+        case "sub":
+            return .sub
+        case "filename":
+            return .filename
+        case "x-success":
+            return .xSuccess
+        case "x-error":
+            return .xError
+        case "loop":
+            return .loop
+        case "shuffle":
+            return .shuffle
+        default:
+            return .undefined
+        }
+    }
+
+    func handlePlay() {
+        guard let safeMovieURL = self.movieURL else {
+            assertionFailure("VLCURLHandler: Fail to retrieve movieURL.")
+            return
+        }
+
+        let playbackService = PlaybackService.sharedInstance()
+        if shuffle {
+            playbackService.isShuffleMode = true
+        }
+
+        play(url: safeMovieURL, sub: self.subURL) { success in
+            guard let callback = success ? self.successCallback : self.errorCallback else {
+                return
+            }
+
+            UIApplication.shared.open(callback,
+                                      options: convertToUIApplicationOpenExternalURLOptionsKeyDictionary([:]),
+                                      completionHandler: nil)
+        }
+
+        if loop {
+            playbackService.repeatMode = .repeatAllItems
+        }
+    }
+
+    func handleDownload() {
+        guard let safeMovieURL = self.movieURL else {
+            assertionFailure("VLCURLHandler: Fail to retrieve movieURL.")
+            return
+        }
+
+        downloadMovie(from: safeMovieURL, fileNameOfMedia: self.fileName)
+    }
+
+    func cleanState() {
+        movieURL = nil
+        subURL = nil
+        successCallback = nil
+        errorCallback = nil
+        fileName = nil
+        loop = false
+        shuffle = false
+    }
+
+    func getURLForValue(value: String) -> URL? {
+        /* check of the entire URL is encoded including "://"
+         * if not, don't remove percent encoding as just singular path components will be encoded
+         * while if the entire URL is encoded, it needs to be decoded before forwarding it to VLC */
+        let length = value.count
+        let end = value.index(value.startIndex, offsetBy: length > 14 ? 14 : length)
+        if value.range(of: "%3A%2F%2F", options: NSString.CompareOptions.caseInsensitive, range: value.startIndex..<end, locale: nil) == nil {
+            return URL(string: value)
+        }
+
+        guard let normalizedString = value.removingPercentEncoding else {
+            return URL(string: value)
+        }
+
+        /* in case removing percent encoding fails, still try to open what we have */
+        return URL(string: normalizedString)
+    }
+
+    func parseURL(url: URL) {
+        guard let query = url.query else {
+            assertionFailure("VLCURLHandler: Invalid query.")
+            return
+        }
+
+        for entry in query.components(separatedBy: "&") {
+            let components = entry.components(separatedBy: "=")
+            guard let key = components.first else {
+                assertionFailure("VLCURLHandler: Fail to retrieve key.")
+                continue
+            }
+
+            let callback = matchCallback(key: key)
+            let isFlag = callback == .loop || callback == .shuffle
+            if components.count < 2 && !isFlag {
+                continue
+            }
+
+            let value = components.dropFirst().joined(separator: "=")
+
+            switch callback {
+            case .url:
+                movieURL = getURLForValue(value: value)
+                break
+            case .sub:
+                subURL = getURLForValue(value: value)
+                break
+            case .filename:
+                fileName = value.removingPercentEncoding
+                break
+            case .xSuccess:
+                successCallback = URL(string: value.removingPercentEncoding ?? value)
+                break
+            case .xError:
+                errorCallback = URL(string: value.removingPercentEncoding ?? value)
+                break
+            case .loop:
+                loop = value.isEmpty || (value as NSString).boolValue
+                break
+            case .shuffle:
+                shuffle = value.isEmpty || (value as NSString).boolValue
+                break
+            default:
+                assertionFailure("VLCURLHandler: Invalid match of callback.")
+                break
+            }
+        }
+    }
+
+#if os(iOS)
+    func createAlert() {
+        guard let safeMovieURL = self.movieURL else {
+            assertionFailure("VLCURLHandler: Fail to retrieve movieURL.")
+            return
+        }
+
+        let alert = UIAlertController(title: NSLocalizedString("OPEN_STREAM_OR_DOWNLOAD",
+                                                               comment: ""),
+                                      message: safeMovieURL.absoluteString,
+                                      preferredStyle: .alert)
+
+        let downloadAction = UIAlertAction(title: NSLocalizedString("BUTTON_DOWNLOAD",
+                                                                    comment: ""),
+                                           style: .default) { _ in
+            self.handleDownload()
+        }
+
+        let playAction = UIAlertAction(title: NSLocalizedString("PLAY_BUTTON",
+                                                                comment: ""),
+                                       style: .default) { _ in
+            self.handlePlay()
+        }
+
+        let alwaysPlayAction = UIAlertAction(title: NSLocalizedString("ALWAYS_STREAM_URL",
+                                                                      comment: ""),
+                                             style: .default) { _ in
+            UserDefaults.standard.set(true, forKey: kVLCSettingAlwaysPlayURLs)
+            self.handlePlay()
+        }
+
+        alert.addAction(downloadAction)
+        alert.addAction(playAction)
+        alert.addAction(alwaysPlayAction)
+
+        UIApplication.shared.dismissPresentedScreensAbovePlayer()?.present(alert, animated: true, completion: nil)
+    }
+#endif
+}
+
+@objc class URLHandlers: NSObject {
+    #if os(iOS)
+    @objc static let googleURLHandler = GoogleURLHandler()
+
+    @objc static let handlers =
+        [
+            googleURLHandler,
+            DropBoxURLHandler(),
+            PodcastFeedURLHandler(),
+            FileURLHandler(),
+            XCallbackURLHandler(),
+            VLCCallbackURLHandler(),
+            ElseCallbackURLHandler()
+        ]
+    #elseif os(tvOS)
+        @objc static let handlers =
+            [
+                VLCTopShelfURLHandler(),
+                XCallbackURLHandler(),
+                VLCCallbackURLHandler(),
+                ElseCallbackURLHandler()
+            ]
+    #else
+        @objc static let handlers =
+            [
+                PodcastFeedURLHandler(),
+                XCallbackURLHandler(),
+                VLCCallbackURLHandler(),
+                ElseCallbackURLHandler()
+            ]
+    #endif
+}
+
+#if os(tvOS)
+// Handles the deep link emitted by the Top Shelf extension: vlc://topshelf?id=<VLCMLIdentifier>.
+// Registered ahead of VLCCallbackURLHandler, which would otherwise claim every vlc:// URL.
+class VLCTopShelfURLHandler: NSObject, VLCURLHandler {
+    var movieURL: URL?
+    var subURL: URL?
+    var successCallback: URL?
+    var errorCallback: URL?
+    var fileName: String?
+    var loop = false
+    var shuffle = false
+
+    @objc func canHandleOpen(url: URL, options: [UIApplication.OpenURLOptionsKey: AnyObject]) -> Bool {
+        return url.scheme == "vlc" && url.host == "topshelf"
+    }
+
+    @objc func performOpen(url: URL, options: [UIApplication.OpenURLOptionsKey: AnyObject]) -> Bool {
+        guard let components = URLComponents(url: url, resolvingAgainstBaseURL: false),
+              let idString = components.queryItems?.first(where: { $0.name == "id" })?.value,
+              let identifier = VLCMLIdentifier(idString) else {
+            return false
+        }
+
+        let service = VLCAppCoordinator.sharedInstance().mediaLibraryService
+        guard let media = service.media(for: identifier) else {
+            return false
+        }
+
+        PlaybackService.sharedInstance().play(media)
+        return true
+    }
+}
+#endif
+
+#if os(iOS)
+class DropBoxURLHandler: NSObject, VLCURLHandler {
+    var movieURL: URL?
+    var subURL: URL?
+    var successCallback: URL?
+    var errorCallback: URL?
+    var fileName: String?
+    var loop = false
+    var shuffle = false
+
+    @objc func canHandleOpen(url: URL, options: [UIApplication.OpenURLOptionsKey: AnyObject]) -> Bool {
+
+        let components = url.pathComponents
+        let methodName = components.count > 1 ? components[1] : nil
+
+        if methodName == "cancel" {
+            return false
+        }
+
+        return url.scheme == "db-\(kVLCDropboxAppKey)"
+    }
+
+    @objc func performOpen(url: URL, options: [UIApplication.OpenURLOptionsKey: AnyObject]) -> Bool {
+        let authResult = DBClientsManager.handleRedirectURL(url) {
+            dbAuthResult in
+            if dbAuthResult?.tag == .DBAuthSuccess {
+                VLCDropboxController.sharedInstance().sessionWasUpdated()
+            }
+        }
+
+        if authResult == true {
+            return true
+        }
+        return false
+    }
+}
+
+class GoogleURLHandler: NSObject, VLCURLHandler {
+    var movieURL: URL?
+    var subURL: URL?
+    var successCallback: URL?
+    var errorCallback: URL?
+    var fileName: String?
+    var loop = false
+    var shuffle = false
+
+    @objc func canHandleOpen(url: URL, options: [UIApplication.OpenURLOptionsKey: AnyObject]) -> Bool {
+        // the scheme is the reversed client ID, which is injected at build time
+        return url.scheme?.hasPrefix("com.googleusercontent.apps") == true
+    }
+
+    @objc func performOpen(url: URL, options: [UIApplication.OpenURLOptionsKey: AnyObject]) -> Bool {
+        return GIDSignIn.sharedInstance.handle(url)
+    }
+}
+
+class FileURLHandler: NSObject, VLCURLHandler {
+    var movieURL: URL?
+    var subURL: URL?
+    var successCallback: URL?
+    var errorCallback: URL?
+    var fileName: String?
+    var loop = false
+    var shuffle = false
+
+    @objc func canHandleOpen(url: URL, options: [UIApplication.OpenURLOptionsKey: AnyObject]) -> Bool {
+        return url.isFileURL
+    }
+
+    @objc func performOpen(url: URL, options: [UIApplication.OpenURLOptionsKey: AnyObject]) -> Bool {
+        let playbackService = PlaybackService.sharedInstance()
+        let addsSubtitles = playbackService.playerIsSetup && url.lastPathComponent.isSupportedSubtitleFormat()
+
+        if InboxManager.isInInbox(url) {
+            let movedURL = InboxManager.moveToDocuments(url) ?? url
+            InboxManager.drainInbox()
+            if addsSubtitles {
+                playbackService.addSubtitlesToCurrentPlayback(from: movedURL)
+            } else {
+                self.play(url: movedURL, completion: nil)
+            }
+            return true
+        }
+
+        let isSecurityScopedURL = url.startAccessingSecurityScopedResource()
+        if isSecurityScopedURL {
+            playbackService.openedLocalURLs.add(url)
+        }
+
+        if addsSubtitles {
+            playbackService.addSubtitlesToCurrentPlayback(from: url)
+            return true
+        }
+
+        self.play(url: url) { _ in
+            guard isSecurityScopedURL else {
+                return
+            }
+
+            url.stopAccessingSecurityScopedResource()
+            playbackService.openedLocalURLs.remove(url)
+        }
+
+        return true
+    }
+}
+#endif
+
+class XCallbackURLHandler: NSObject, VLCURLHandler {
+    var movieURL: URL?
+    var subURL: URL?
+    var successCallback: URL?
+    var errorCallback: URL?
+    var fileName: String?
+    var loop = false
+    var shuffle = false
+
+    enum VLCXCallbackActionType {
+        case stream
+        case download
+        case undefined
+    }
+
+    func matchAction(action: String) -> VLCXCallbackActionType {
+        switch action {
+        case "stream":
+            return .stream
+        case "download":
+            return .download
+        default:
+            return .undefined
+        }
+    }
+
+    @objc func canHandleOpen(url: URL, options: [UIApplication.OpenURLOptionsKey: AnyObject]) -> Bool {
+        return url.scheme == "roxy-x-callback" || url.scheme == "vlc-x-callback" || url.scheme == "x-callback-url"
+    }
+
+    @objc func performOpen(url: URL, options: [UIApplication.OpenURLOptionsKey: AnyObject]) -> Bool {
+        let action = matchAction(action: url.path.replacingOccurrences(of: "/", with: ""))
+
+        cleanState()
+        parseURL(url: url)
+
+        switch action {
+        case .stream:
+            handlePlay()
+            return true
+        case .download:
+            handleDownload()
+            return true
+        default:
+#if os(iOS)
+            if UserDefaults.standard.bool(forKey: kVLCSettingAlwaysPlayURLs) {
+                self.handlePlay()
+            } else {
+                self.createAlert()
+            }
+#else
+            self.handlePlay()
+#endif
+            return true
+        }
+    }
+}
+
+public class VLCCallbackURLHandler: NSObject, VLCURLHandler {
+    public var movieURL: URL?
+    public var subURL: URL?
+    public var successCallback: URL?
+    public var errorCallback: URL?
+    public var fileName: String?
+    public var loop = false
+    public var shuffle = false
+
+    @objc public func canHandleOpen(url: URL, options: [UIApplication.OpenURLOptionsKey: AnyObject]) -> Bool {
+        return url.scheme == "roxy" || url.scheme == "vlc"
+    }
+
+    // Safari fixes URLs like "vlc://http://example.org" to "vlc://http//example.org"
+    public func transformVLCURL(_ url: URL) -> URL {
+        let prefix = url.scheme == "roxy" ? "roxy://" : "vlc://"
+        var parsedString = url.absoluteString.replacingOccurrences(of: prefix, with: "")
+        if let location = parsedString.range(of: "//"), parsedString[parsedString.index(location.lowerBound, offsetBy: -1)] != ":" {
+            parsedString = "\(parsedString[parsedString.startIndex..<location.lowerBound])://\(parsedString[location.upperBound...])"
+        } else if !parsedString.hasPrefix("http://") && !parsedString.hasPrefix("https://") && !parsedString.hasPrefix("ftp://") {
+            parsedString = "http://\(parsedString)"
+        }
+        return URL(string: parsedString) ?? url
+    }
+
+    public func performOpen(url: URL, options: [UIApplication.OpenURLOptionsKey: AnyObject]) -> Bool {
+        let transformedURL = transformVLCURL(url)
+
+        movieURL = transformedURL
+
+#if os(iOS)
+        let scheme = transformedURL.scheme
+        if scheme == "http" || scheme == "https" || scheme == "ftp" {
+            if UserDefaults.standard.bool(forKey: kVLCSettingAlwaysPlayURLs) {
+                handlePlay()
+            } else {
+                self.createAlert()
+            }
+        } else {
+            handlePlay()
+        }
+#else
+        handlePlay()
+#endif
+
+        return true
+    }
+}
+
+class ElseCallbackURLHandler: NSObject, VLCURLHandler {
+    var movieURL: URL?
+    var subURL: URL?
+    var successCallback: URL?
+    var errorCallback: URL?
+    var fileName: String?
+    var loop = false
+    var shuffle = false
+
+    @objc func canHandleOpen(url: URL, options: [UIApplication.OpenURLOptionsKey: AnyObject]) -> Bool {
+        guard let scheme = url.scheme else {
+            return false
+        }
+        return scheme.range(of: kSupportedProtocolSchemes,
+                            options: [.regularExpression, .caseInsensitive], range: nil, locale: nil) != nil
+    }
+
+    func performOpen(url: URL, options: [UIApplication.OpenURLOptionsKey: AnyObject]) -> Bool {
+        self.play(url: url, completion: nil)
+        return true
+    }
+}
+
+extension VLCURLHandler {
+    // TODO: This code should probably not live here
+    func play(url: URL, sub: URL? = nil, completion: ((Bool) -> Void)?) {
+#if !os(tvOS)
+        UIApplication.shared.dismissPresentedScreensAbovePlayer()
+#endif
+        let vpc = PlaybackService.sharedInstance()
+        if let media = VLCMedia(url: url) {
+            let mediaList = VLCMediaList(array: [media])
+            vpc.playMediaList(mediaList, firstIndex: 0, subtitlesFilePath: sub?.absoluteString, completion: completion)
+        }
+    }
+
+#if os(iOS)
+    func downloadMovie(from url: URL, fileNameOfMedia fileName: String?) {
+        guard let media = VLCMedia(url: url) else {
+            return
+        }
+        VLCAppCoordinator.sharedInstance().transferController.addVLCMedia(toDownloadList: media, fileNameOfMedia: fileName)
+    }
+#else
+    func downloadMovie(from url: URL, fileNameOfMedia fileName: String?) {
+        APLog("content download via x-callback-url not supported on this OS")
+    }
+#endif
+}
+
+// Helper function inserted by Swift 4.2 migrator.
+fileprivate func convertToUIApplicationOpenExternalURLOptionsKeyDictionary(_ input: [String: Any]) -> [UIApplication.OpenExternalURLOptionsKey: Any] {
+	return Dictionary(uniqueKeysWithValues: input.map { key, value in (UIApplication.OpenExternalURLOptionsKey(rawValue: key), value)})
+}

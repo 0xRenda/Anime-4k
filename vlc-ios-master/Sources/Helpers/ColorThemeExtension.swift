@@ -1,0 +1,83 @@
+/*****************************************************************************
+ * ColorThemeExtension.swift
+ *
+ * Copyright © 2021 VLC authors and VideoLAN
+ * Copyright © 2021 Videolabs
+ *
+ * Authors: Soomin Lee <bubu@mikan.io>
+ *
+ * Refer to the COPYING file of the official project for license.
+ *****************************************************************************/
+
+extension PresentationTheme {
+    static func traitCollectionDidChange(from previousTraitCollection: UITraitCollection?, to traitCollection: UITraitCollection) {
+        if traitCollection.hasDifferentColorAppearance(comparedTo: previousTraitCollection) {
+#if !os(tvOS)
+            guard UserDefaults.standard.integer(forKey: kVLCSettingAppTheme) == kVLCSettingAppThemeSystem else {
+                return
+            }
+#endif
+            PresentationTheme.themeDidUpdate()
+        }
+    }
+}
+
+extension UICollectionViewController {
+    open override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
+        super.traitCollectionDidChange(previousTraitCollection)
+        PresentationTheme.traitCollectionDidChange(from: previousTraitCollection, to: traitCollection)
+    }
+}
+
+extension UITableViewController {
+    open override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
+        super.traitCollectionDidChange(previousTraitCollection)
+        PresentationTheme.traitCollectionDidChange(from: previousTraitCollection, to: traitCollection)
+    }
+}
+
+#if os(iOS)
+extension VLCOpenNetworkStreamViewController {
+    open override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
+        super.traitCollectionDidChange(previousTraitCollection)
+        PresentationTheme.traitCollectionDidChange(from: previousTraitCollection, to: traitCollection)
+    }
+}
+
+extension VLCTransferViewController {
+    open override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
+        super.traitCollectionDidChange(previousTraitCollection)
+        PresentationTheme.traitCollectionDidChange(from: previousTraitCollection, to: traitCollection)
+    }
+}
+
+extension VLCNetworkLoginViewController {
+    open override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
+        super.traitCollectionDidChange(previousTraitCollection)
+        PresentationTheme.traitCollectionDidChange(from: previousTraitCollection, to: traitCollection)
+    }
+}
+#endif
+
+extension UINavigationController {
+    open override func viewDidLoad() {
+        super.viewDidLoad()
+        NotificationCenter.default.addObserver(self, selector: #selector(themeDidChange),
+                                               name: .VLCThemeDidChangeNotification, object: nil)
+    }
+
+    @objc func themeDidChange() {
+#if !os(tvOS)
+        if #available(iOS 26.0, *) {
+            let textColor = PresentationTheme.current.colors.navigationbarTextColor
+            navigationBar.titleTextAttributes = [.foregroundColor: textColor]
+            navigationBar.largeTitleTextAttributes = [.foregroundColor: textColor]
+        } else {
+            navigationBar.standardAppearance = AppearanceManager.navigationbarAppearance()
+            navigationBar.compactAppearance = AppearanceManager.navigationbarAppearance()
+            navigationBar.scrollEdgeAppearance = AppearanceManager.navigationbarAppearance()
+            navigationBar.barTintColor = PresentationTheme.current.colors.navigationbarColor
+        }
+#endif
+    }
+}

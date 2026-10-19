@@ -1,0 +1,236 @@
+/*****************************************************************************
+ * VLCPlaybackService.h
+ * VLC for iOS
+ *****************************************************************************
+ * Copyright (c) 2013-2026 VLC authors and VideoLAN
+ * $Id$
+ *
+ * Authors: Felix Paul Kühne <fkuehne # videolan.org>
+ *          Tobias Conradi <videolan # tobias-conradi.de>
+ *          Maxime Chapelet <umxprime # videolabs.io>
+ *          Diogo Simao Marques <dogo@videolabs.io>
+ *          Pratik Ray <raypratik365@gmail.com>
+ *
+ * Refer to the COPYING file of the official project for license.
+ *****************************************************************************/
+
+NS_ASSUME_NONNULL_BEGIN
+extern NSString *const VLCPlaybackServicePlaybackDidStart;
+extern NSString *const VLCPlaybackServicePlaybackDidPause;
+extern NSString *const VLCPlaybackServicePlaybackDidResume;
+extern NSString *const VLCPlaybackServicePlaybackWillStop;
+extern NSString *const VLCPlaybackServicePlaybackDidStop;
+extern NSString *const VLCPlaybackServicePlaybackDidFail;
+extern NSString *const VLCPlaybackServicePlaybackMetadataDidChange;
+extern NSString *const VLCPlaybackServicePlaybackRateDidChange;
+extern NSString *const VLCPlaybackServicePlaybackPositionUpdated;
+extern NSString *const VLCPlaybackServicePlaybackModeUpdated;
+extern NSString *const VLCPlaybackServiceShuffleModeUpdated;
+extern NSString *const VLCPlaybackServicePlaybackDidMoveOnToNextItem;
+extern NSString *const VLCPlaybackServiceSleepTimerDidChange;
+extern NSString *const VLCLastPlaylistPlayedMedia;
+
+@class VLCPlaybackService;
+@class VLCMetaData;
+@class VLCMLMedia;
+@class VLCPlayerDisplayController;
+@class VLCPlaybackServiceAdjustFilter;
+@class VLCMediaPlayerTitleDescription;
+@class VLCMediaPlayerChapterDescription;
+@class VLCMediaPlayerTrack;
+@class VLCAudioEqualizerPreset;
+
+@protocol VLCPlaybackServiceDelegate <NSObject>
+@optional
+- (void)playbackPositionUpdated:(VLCPlaybackService *)playbackService;
+- (void)mediaPlayerStateChanged:(VLCMediaPlayerState)currentState
+                      isPlaying:(BOOL)isPlaying
+currentMediaHasTrackToChooseFrom:(BOOL)currentMediaHasTrackToChooseFrom
+        currentMediaHasChapters:(BOOL)currentMediaHasChapters
+             forPlaybackService:(VLCPlaybackService *)playbackService;
+- (void)mediaPlayerBufferingChanged:(float)progress
+                 forPlaybackService:(VLCPlaybackService *)playbackService;
+- (void)prepareForMediaPlayback:(VLCPlaybackService *)playbackService;
+- (void)showStatusMessage:(NSString *)statusMessage;
+- (void)displayMetadataForPlaybackService:(VLCPlaybackService *)playbackService
+                                 metadata:(VLCMetaData *)metadata;
+- (void)playbackServiceDidSwitchAspectRatio:(NSInteger)aspectRatio;
+- (void)playbackService:(VLCPlaybackService *)playbackService
+              nextMedia:(VLCMedia *)media;
+- (void)playModeUpdated;
+- (void)reloadPlayQueue;
+- (void)pictureInPictureStateDidChange:(BOOL)isEnabled
+NS_SWIFT_NAME(pictureInPictureStateDidChange(enabled:));
+- (void)updateWidgetsIfNeeded;
+@end
+
+NS_SWIFT_NAME(PlaybackService)
+@interface VLCPlaybackService : NSObject
+
+@property (nonatomic, strong, nullable) UIView *videoOutputView API_UNAVAILABLE(watchos);
+
+@property (nonatomic, retain) VLCMediaList *mediaList;
+@property (nonatomic, retain) VLCMediaList *shuffledList;
+
+/* returns nil if currently playing item is not available,*/
+
+@property (nonatomic, strong, readonly, nullable) VLCMedia *currentlyPlayingMedia;
+@property (nonatomic, strong, readonly, nullable) VLCMLMedia *currentlyPlayingLibraryMedia;
+
+@property (nonatomic, weak) id<VLCPlaybackServiceDelegate> delegate;
+
+@property (nonatomic, readonly) VLCMediaPlayerState mediaPlayerState;
+@property (nonatomic, readonly) VLCMetaData *metadata;
+
+@property (nonatomic, readonly) NSInteger mediaDuration;
+@property (nonatomic, readonly) VLCTime *mediaLength;
+@property (nonatomic, readonly) BOOL isPlaying;
+@property (nonatomic, readonly) BOOL playerIsSetup;
+@property (nonatomic, readwrite) BOOL playAsAudio;
+@property (nonatomic, readwrite) BOOL expectsAudioOnlyContent;
+@property (nonatomic, readwrite) VLCRepeatMode repeatMode;
+@property (nonatomic, assign, getter=isShuffleMode) BOOL shuffleMode;
+@property (nonatomic, readwrite) float playbackRate; // default = 1.0
+@property (nonatomic, readonly) CGFloat defaultPlaybackRate; // user-configured default speed
+@property (nonatomic, readwrite) float audioDelay; // in milliseconds, default = 0.0
+@property (nonatomic, readwrite) float playbackPosition; // in seconds, default = 0.0
+@property (nonatomic, readwrite) float startPosition; // [0;1] applied when the next media opens, negative to enforce none
+@property (nonatomic, readwrite) float subtitleDelay; // in milliseconds, default = 0.0
+@property (nonatomic, readonly) VLCPlaybackServiceAdjustFilter *adjustFilter;
+@property (nonatomic, readonly) CGFloat yaw; //  between ]-180;180]
+@property (nonatomic, readonly) CGFloat pitch; // ]-90;90]
+@property (nonatomic, readonly) CGFloat roll; // ]-180;180]
+@property (nonatomic, readonly) CGFloat fov; // ]0;180[ (default 80.)
+
+@property (readonly) NSInteger indexOfCurrentAudioTrack;
+@property (readonly) NSInteger indexOfCurrentPrimaryVideoSubtitleTrack;
+@property (readonly) NSInteger indexOfCurrentSecondaryVideoSubtitleTrack;
+@property (readonly) NSInteger indexOfCurrentTitle;
+@property (readonly, nullable) VLCMediaPlayerTitleDescription *currentTitleDescription;
+@property (readonly) NSInteger indexOfCurrentChapter;
+@property (readonly, nullable) VLCMediaPlayerChapterDescription *currentChapterDescription;
+@property (readonly) NSInteger numberOfVideoTracks;
+@property (readonly) NSInteger numberOfAudioTracks;
+@property (readonly) NSInteger numberOfVideoSubtitlesIndexes;
+@property (nonatomic, readonly) NSArray<VLCMediaPlayerTrack *> *audioTracks;
+@property (nonatomic, readonly) NSArray<VLCMediaPlayerTrack *> *textTracks;
+@property (readonly) NSInteger numberOfTitles;
+@property (readonly) NSInteger numberOfChaptersForCurrentTitle;
+@property (assign, readonly) BOOL currentMediaHasTrackToChooseFrom;
+@property (assign, readwrite) BOOL fullscreenSessionRequested;
+@property (assign, readonly) BOOL isSeekable;
+@property (assign, readonly) BOOL currentMediaIs360Video;
+@property (readonly) BOOL isNextMediaAvailable;
+@property (readonly) NSNumber *playbackTime;
+@property (nonatomic, readonly) NSDictionary *mediaOptionsDictionary;
+@property (nonatomic, readonly, nullable) NSTimer *sleepTimer;
+@property (nonatomic, readonly) NSTimeInterval sleepTimerInterval;
+@property (nonatomic) BOOL stopAfterCurrentItem;
+
+@property (nonatomic, readwrite) CGFloat preAmplification;
+
+#if TARGET_OS_IOS
+@property (nonatomic, nullable) VLCRendererItem *renderer;
+#endif
+
+@property (nonatomic, readonly) NSInteger currentAspectRatio;
+
+@property (nonatomic, readonly) VLCPlayerDisplayController *playerDisplayController;
+
+@property (nonatomic) NSMutableArray *openedLocalURLs;
+
++ (VLCPlaybackService *)sharedInstance;
+- (VLCTime *)playedTime;
+#pragma mark - playback
+- (void)startPlayback;
+- (void)stopPlayback;
+- (void)playPause;
+- (void)play;
+- (void)pause;
+- (BOOL)next;
+- (BOOL)previous;
+- (void)jumpForward:(int)interval;
+- (void)jumpBackward:(int)interval;
+- (void)nextFrame;
+- (void)previousFrame;
+- (void)toggleRepeatMode;
+- (void)changePlaybackRateByFactor:(float)factor;
+- (float)restorePlaybackRateForCurrentMedia;
+- (void)savePlaybackRateForCurrentMedia;
+
+- (void)setABLoopFromPosition:(double)from toPosition:(double)to;
+- (void)resetABLoop;
+- (VLCTime *)remainingTime;
+
+- (NSString *)audioTrackNameAtIndex:(NSInteger)index;
+- (NSString *)videoSubtitleNameAtIndex:(NSInteger)index;
+- (nullable VLCMediaPlayerTitleDescription *)titleDescriptionAtIndex:(NSInteger)index;
+- (nullable VLCMediaPlayerChapterDescription *)chapterDescriptionAtIndex:(NSInteger)index;
+- (void)selectAudioTrackAtIndex:(NSInteger)index;
+- (void)disableAudio;
+- (void)selectPrimaryVideoSubtitleAtIndex:(NSInteger)index;
+- (void)selectSecondaryVideoSubtitleAtIndex:(NSInteger)index;
+- (void)disablePrimaryVideoSubtitle;
+- (void)disableSecondaryVideoSubtitle;
+- (void)syncVideoSubtitleState;
+- (void)selectTitleAtIndex:(NSInteger)index;
+- (void)selectChapterAtIndex:(NSInteger)index;
+- (void)setAudioPassthrough:(BOOL)shouldPass;
+- (void)switchAspectRatio:(BOOL)toggleFullScreen;
+- (void)setCurrentAspectRatio:(NSInteger)currentAspectRatio;
+
+- (void)playItemAtIndex:(NSUInteger)index;
+
+- (BOOL)updateViewpoint:(CGFloat)yaw pitch:(CGFloat)pitch roll:(CGFloat)roll fov:(CGFloat)fov absolute:(BOOL)absolute;
+- (NSInteger)currentMediaProjection;
+
+- (void)recoverDisplayedMetadata;
+- (void)recoverPlaybackState;
+- (void)disableSubtitlesIfNeeded;
+
+- (BOOL)isPlayingOnExternalScreen;
+
+- (void)setPlayerHidden:(BOOL)hidden;
+- (void)setPlayerDisplayController:(VLCPlayerDisplayController *)playerDisplayController;
+
+- (void)setNeedsMetadataUpdate;
+- (void)scheduleSleepTimerWithInterval:(NSTimeInterval)timeInterval;
+- (void)cancelSleepTimer;
+- (void)performNavigationAction:(VLCMediaPlaybackNavigationAction)action;
+- (void)playMediaList:(VLCMediaList *)mediaList firstIndex:(NSInteger)index subtitlesFilePath:(nullable NSString *)subsFilePath;
+- (void)playMediaList:(VLCMediaList *)mediaList firstIndex:(NSInteger)index subtitlesFilePath:(nullable NSString *)subsFilePath completion:(void (^ __nullable)(BOOL success))completion;
+- (void)addAudioToCurrentPlaybackFromURL:(NSURL *)audioURL;
+- (void)addSubtitlesToCurrentPlaybackFromURL:(NSURL *)subtitleURL;
+
+- (void)setAmplification:(CGFloat)amplification forBand:(unsigned int)index;
+- (CGFloat)amplificationOfBand:(unsigned int)index;
+- (unsigned int)numberOfBands;
+- (CGFloat)frequencyOfBandAtIndex:(unsigned int)index;
+- (NSArray<VLCAudioEqualizerPreset *> *)equalizerProfiles;
+- (void)togglePictureInPicture;
+- (void)saveSnapshotWithCompletion:(void (^)(BOOL success, NSError *_Nullable error))completion;
+
+- (void)savePlaybackState;
+
+- (void)configurePlaybackWithMediaAtIndex:(NSInteger)index fromMediaList:(VLCMediaList *)mediaList;
+#if TARGET_OS_IOS || TARGET_OS_VISION
+- (void)restoreAudioAndSubtitleTrack;
+- (BOOL)mediaListContains:(NSURL *)url;
+- (void)removeMediaFromMediaListAtIndex:(NSUInteger)index;
+- (NSIndexPath *)selectedEqualizerProfile;
+@property (nonatomic, readonly) NSArray<NSString *> *customEqualizerProfileNames;
+- (void)applyEqualizerPreset:(unsigned int)profile;
+- (void)applyCustomEqualizerProfileAtIndex:(NSUInteger)index;
+- (void)restoreSavedEqualizerProfile;
+- (void)saveCustomEqualizerProfileWithName:(NSString *)name;
+- (void)renameCustomEqualizerProfileAtIndex:(NSUInteger)index toName:(NSString *)name;
+- (void)deleteCustomEqualizerProfileAtIndex:(NSUInteger)index;
+- (void)moveCustomEqualizerProfileAtIndex:(NSUInteger)index up:(BOOL)up;
+#endif
+
+#if !TARGET_OS_WATCH
+- (void)saveCurrentlyPlayingMediaIdentifier;
+#endif
+
+NS_ASSUME_NONNULL_END
+@end

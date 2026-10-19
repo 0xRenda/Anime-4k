@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<document type="com.apple.InterfaceBuilder3.CocoaTouch.XIB" version="3.0" toolsVersion="24127" targetRuntime="iOS.CocoaTouch" propertyAccessControl="none" useAutolayout="YES" useTraitCollections="YES" useSafeAreas="YES" colorMatched="YES">
+    <device id="retina6_1" orientation="portrait" appearance="light"/>
+    <dependencies>
+        <deployment identifier="iOS"/>
+        <plugIn identifier="com.apple.InterfaceBuilder.IBCocoaTouchPlugin" version="24063"/>
+        <capability name="Safe area layout guides" minToolsVersion="9.0"/>
+        <capability name="documents saved in the Xcode 8 format" minToolsVersion="8.0"/>
+    </dependencies>
+    <objects>
+        <placeholder placeholderIdentifier="IBFilesOwner" id="-1" userLabel="File's Owner" customClass="AddToCollectionViewController" customModule="VLC" customModuleProvider="target">
+            <connections>
+                <outlet property="collectionView" destination="Ozj-oC-7Dg" id="mSP-HL-GFb"/>
+                <outlet property="collectionViewTopConstraint" destination="8fV-aV-Q9C" id="nbY-ce-Ktv"/>
+                <outlet property="newCollectionButton" destination="A6v-5Z-MTf" id="g02-SF-rdE"/>
+                <outlet property="view" destination="GSO-Mh-jPo" id="RMB-UZ-7lQ"/>
+            </connections>
+        </placeholder>
+        <placeholder placeholderIdentifier="IBFirstResponder" id="-2" customClass="UIResponder"/>
+        <view contentMode="scaleToFill" restorationIdentifier="AddToPlaylistView" id="GSO-Mh-jPo" userLabel="AddToCollectionView">
+            <rect key="frame" x="0.0" y="0.0" width="414" height="896"/>
+            <autoresizingMask key="autoresizingMask" flexibleMaxX="YES" flexibleMaxY="YES"/>
+            <subviews>
+                <collectionView clipsSubviews="YES" multipleTouchEnabled="YES" contentMode="scaleToFill" showsHorizontalScrollIndicator="NO" dataMode="none" translatesAutoresizingMaskIntoConstraints="NO" id="Ozj-oC-7Dg">
+                    <rect key="frame" x="0.0" y="106" width="414" height="667"/>
+                    <color key="backgroundColor" white="1" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
+                    <collectionViewFlowLayout key="collectionViewLayout" minimumLineSpacing="10" minimumInteritemSpacing="10" id="o3C-iH-Udd">
+                        <size key="itemSize" width="50" height="50"/>
+                        <size key="headerReferenceSize" width="0.0" height="0.0"/>
+                        <size key="footerReferenceSize" width="0.0" height="0.0"/>
+                        <inset key="sectionInset" minX="0.0" minY="0.0" maxX="0.0" maxY="0.0"/>
+                    </collectionViewFlowLayout>
+                </collectionView>
+                <stackView opaque="NO" contentMode="scaleToFill" axis="vertical" spacing="10" translatesAutoresizingMaskIntoConstraints="NO" id="LvI-AK-2Br">
+                    <rect key="frame" x="57" y="783" width="300" height="45"/>
+                    <subviews>
+                        <button opaque="NO" contentMode="scaleToFill" contentHorizontalAlignment="center" contentVerticalAlignment="center" buttonType="system" lineBreakMode="middleTruncation" translatesAutoresizingMaskIntoConstraints="NO" id="A6v-5Z-MTf">
+                            <rect key="frame" x="0.0" y="0.0" width="300" height="45"/>
+                            <color key="backgroundColor" red="0.96470588235294119" green="0.49803921568627452" blue="0.0" alpha="1" colorSpace="calibratedRGB"/>
+                            <constraints>
+                                <constraint firstAttribute="height" constant="45" id="TSH-AI-tWF"/>
+                                <constraint firstAttribute="width" priority="900" constant="300" id="YiE-VL-osc"/>
+                                <constraint firstAttribute="width" relation="greaterThanOrEqual" priority="750" constant="100" id="emw-Ex-QpX"/>
+                                <constraint firstAttribute="width" relation="lessThanOrEqual" constant="300" id="yiR-DN-Qy2"/>
+                            </constraints>
+                            <fontDescription key="fontDescription" type="system" weight="semibold" pointSize="15"/>
+                            <color key="tintColor" red="0.59460381650000005" green="0.83921135540000003" blue="0.31552115819999998" alpha="1" colorSpace="calibratedRGB"/>
+                            <state key="normal" title="Default">
+                                <color key="titleColor" white="1" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
+                            </state>
+                            <connections>
+                                <action selector="handleNewCollection:" destination="-1" eventType="touchUpInside" id="jUw-JJ-D4r"/>
+                            </connections>
+                        </button>
+                    </subviews>
+                    <variation key="heightClass=compact" axis="horizontal"/>
+                </stackView>
+            </subviews>
+            <viewLayoutGuide key="safeArea" id="SK5-46-lSh"/>
+            <color key="backgroundColor" white="1" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
+            <constraints>
+                <constraint firstItem="Ozj-oC-7Dg" firstAttribute="top" secondItem="SK5-46-lSh" secondAttribute="top" constant="10" id="8fV-aV-Q9C"/>
+                <constraint firstItem="LvI-AK-2Br" firstAttribute="centerX" secondItem="Ozj-oC-7Dg" secondAttribute="centerX" id="H1O-dS-Z1s"/>
+                <constraint firstItem="LvI-AK-2Br" firstAttribute="bottom" secondItem="SK5-46-lSh" secondAttribute="bottom" priority="750" id="Uxq-6O-bL3"/>
+                <constraint firstItem="LvI-AK-2Br" firstAttribute="top" secondItem="Ozj-oC-7Dg" secondAttribute="bottom" constant="10" id="Yuf-oR-drD"/>
+                <constraint firstItem="Ozj-oC-7Dg" firstAttribute="leading" secondItem="SK5-46-lSh" secondAttribute="leading" id="dl6-v8-tY0"/>
+                <constraint firstItem="LvI-AK-2Br" firstAttribute="bottom" relation="lessThanOrEqual" secondItem="GSO-Mh-jPo" secondAttribute="bottom" constant="-10" id="i1H-2X-P3P"/>
+                <constraint firstItem="Ozj-oC-7Dg" firstAttribute="trailing" secondItem="SK5-46-lSh" secondAttribute="trailing" id="mCs-Yn-ebq"/>
+            </constraints>
+            <point key="canvasLocation" x="47.826086956521742" y="35.491071428571423"/>
+        </view>
+    </objects>
+</document>

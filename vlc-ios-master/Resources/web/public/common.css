@@ -1,0 +1,163 @@
+/* YUI CSS Reset */
+body, div, dl, dt, dd, ul, ol, li, h1, h2, h3, h4, h5, h6, pre,
+form, fieldset, input, textarea, p, blockquote, th, td, nav, header, footer {
+    margin: 0;
+    padding: 0;
+}
+
+table {
+    border-collapse: collapse;
+    border-spacing: 0;
+}
+
+fieldset, img {
+    border: 0;
+}
+
+address, caption, cite, code, dfn, em, strong, th, var {
+    font-style: normal;
+    font-weight: normal;
+}
+
+ol, ul {
+    list-style: none;
+}
+
+caption, th {
+    text-align: left;
+}
+
+h1, h2, h3, h4, h5, h6 {
+    font-size: 100%;
+    font-weight: normal;
+}
+
+q:before, q:after {
+    content: '';
+}
+
+abbr, acronym {
+    border: 0;
+}
+
+@font-face {
+    font-family: 'Raleway';
+    font-style: normal;
+    font-weight: 400;
+    src: local('Raleway'), url("/public/Raleway.woff") format('woff');
+}
+
+* {
+    -moz-box-sizing: border-box;
+    -webkit-box-sizing: border-box;
+    box-sizing: border-box;
+}
+
+:root {
+    color-scheme: light dark;
+
+    --bg-page: rgb(31,31,31);
+    --bg-card: rgb(42,42,42);
+    --bg-thumb: rgb(60,60,60);
+    --bg-input: #2a2a2a;
+    --text-primary: #fff;
+    --text-secondary: rgb(170,170,170);
+    --text-footer: rgb(120,120,120);
+    --text-shadow: 1px 1px 2px black;
+    --separator: rgba(255,255,255,0.1);
+    --overlay-bg: rgba(0,0,0,0.8);
+    --hover-shadow: 0 4px 12px rgba(0,0,0,0.4);
+    --progress-bar-bg: white;
+    --progress-bar-text: #1F1F1F;
+}
+
+@media (prefers-color-scheme: light) {
+    :root {
+        --bg-page: rgb(242,242,247);
+        --bg-card: #fff;
+        --bg-thumb: rgb(220,220,225);
+        --bg-input: rgb(230,230,235);
+        --text-primary: #1c1c1e;
+        --text-secondary: rgb(110,110,115);
+        --text-footer: rgb(140,140,145);
+        --text-shadow: none;
+        --separator: rgba(0,0,0,0.1);
+        --overlay-bg: rgba(0,0,0,0.5);
+        --hover-shadow: 0 4px 12px rgba(0,0,0,0.12);
+        --progress-bar-bg: rgb(50,50,50);
+        --progress-bar-text: #fff;
+    }
+}
+
+html {
+    height: 100%;
+}
+
+body {
+    height: 100%;
+    font: 14px/22px "Helvetica Neue","Helvetica", Arial, sans-serif;
+    color: var(--text-primary);
+    -webkit-font-smoothing: antialiased;
+    position: relative;
+    background-color: var(--bg-page);
+    background-position: 0 88px;
+}
+
+#header {
+    text-align: center;
+    height: 88px;
+    background-color: rgb(255, 132, 0);
+    background-image: -webkit-gradient(linear, left top, left bottom, from(rgb(255, 132, 0)), to(rgb(255, 100, 0)));
+    background-image: -webkit-linear-gradient(top, rgb(255, 132, 0), rgb(255, 100, 0));
+    background-image: -moz-linear-gradient(top, rgb(255, 132, 0), rgb(255, 100, 0));
+    background-image: -ms-linear-gradient(top, rgb(255, 132, 0), rgb(255, 100, 0));
+    background-image: -o-linear-gradient(top, rgb(255, 132, 0), rgb(255, 100, 0));
+    background-image: linear-gradient(top, rgb(255, 132, 0), rgb(255, 100, 0));
+
+}
+
+.nav {
+    height: 88px;
+    padding: 14px;
+    font-family: "Raleway", "Helvetica Neue";
+    font-size: 36px;
+    line-height: 60px;
+    color: white;
+}
+
+.btn {
+    display: inline-block;
+    background-color: transparent;
+
+    color: white;
+    font-size: 1.3em;
+    font-weight: bold;
+    line-height: 52px;
+
+    text-align: center;
+    padding: 0 12px;
+    height: 58px;
+    min-width: 140px;
+    cursor: pointer;
+}
+
+.btn:hover{
+    opacity: 0.5;
+}
+
+.btn:active{
+    opacity: 0.25;
+}
+
+.linkBtn {
+    float: left;
+    width: 82px;
+}
+
+.linkBtn .icon {
+    height: 60px;
+    background-image: url('/public/cone26-web.png');
+    background-position: center;
+    background-repeat: no-repeat;
+    background-size: 38%;
+}

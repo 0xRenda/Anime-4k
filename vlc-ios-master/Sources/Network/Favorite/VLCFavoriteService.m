@@ -1,0 +1,437 @@
+/*****************************************************************************
+ * VLCFavoriteService.m
+ * VLC for iOS
+ *****************************************************************************
+ * Copyright (c) 2023-2026 VideoLAN. All rights reserved.
+ * $Id$
+ *
+ * Authors: Felix Paul Kühne <fkuehne # videolan.org>
+ *
+ * Refer to the COPYING file of the official project for license.
+ *****************************************************************************/
+
+#import "VLCFavoriteService.h"
+#import "VLCNetworkServerLoginInformation+Keychain.h"
+#import "VLCPlaybackService.h"
+
+NSString *VLCFavoritesContent = @"VLCFavoritesContent";
+NSString *VLCFavoriteUserVisibleName = @"VLCFavoriteUserVisibleName";
+NSString *VLCFavoriteURL = @"VLCFavoriteURL";
+NSString *VLCFavoriteArray = @"VLCFavoriteArray";
+NSString *VLCFavoriteGroupName = @"VLCFavoriteGroupName";
+NSString *VLCFavoriteArtworkURL = @"VLCFavoriteArtworkURL";
+NSString *VLCFavoriteMediaDescription = @"VLCFavoriteMediaDescription";
+NSString *VLCFavoriteLastPlayedDate = @"VLCFavoriteLastPlayedDate";
+NSString *VLCFavoritePlayable = @"VLCFavoritePlayable";
+NSString *VLCFavoritesFile = @"Favorites.plist";
+NSString *VLCTransitionedUPnPFavorites = @"VLCTransitionedUPnPFavorites";
+NSString *const VLCFavoriteGroupRadio = @"radio";
+NSString *const VLCFavoriteServiceContentDidChange = @"VLCFavoriteServiceContentDidChange";
+
+@implementation VLCFavorite
+
+- (instancetype)initWithCoder:(NSCoder *)coder
+{
+    self = [super init];
+    if (self) {
+        self.userVisibleName = [coder decodeObjectForKey:VLCFavoriteUserVisibleName];
+        self.url = [coder decodeObjectForKey:VLCFavoriteURL];
+        self.groupName = [coder decodeObjectForKey:VLCFavoriteGroupName];
+        self.artworkURL = [coder decodeObjectForKey:VLCFavoriteArtworkURL];
+        self.mediaDescription = [coder decodeObjectForKey:VLCFavoriteMediaDescription];
+        self.lastPlayedDate = [coder decodeObjectForKey:VLCFavoriteLastPlayedDate];
+        self.playable = [coder decodeBoolForKey:VLCFavoritePlayable];
+    }
+    return self;
+}
+
+- (void)encodeWithCoder:(NSCoder *)coder
+{
+    [coder encodeObject:self.userVisibleName forKey:VLCFavoriteUserVisibleName];
+    [coder encodeObject:self.url forKey:VLCFavoriteURL];
+    [coder encodeObject:self.groupName forKey:VLCFavoriteGroupName];
+    [coder encodeObject:self.artworkURL forKey:VLCFavoriteArtworkURL];
+    [coder encodeObject:self.mediaDescription forKey:VLCFavoriteMediaDescription];
+    [coder encodeObject:self.lastPlayedDate forKey:VLCFavoriteLastPlayedDate];
+    [coder encodeBool:self.playable forKey:VLCFavoritePlayable];
+}
+
+- (id)copyWithZone:(NSZone *)zone
+{
+    VLCFavorite *copy = [[VLCFavorite allocWithZone:zone] init];
+    copy.userVisibleName = self.userVisibleName;
+    copy.url = self.url;
+    copy.groupName = self.groupName;
+    copy.artworkURL = self.artworkURL;
+    copy.mediaDescription = self.mediaDescription;
+    copy.lastPlayedDate = self.lastPlayedDate;
+    copy.playable = self.playable;
+    return copy;
+}
+
+- (NSString *)protocolIdentifier
+{
+    return [[self.url scheme] uppercaseString];
+}
+
+- (NSString *)groupIdentifier
+{
+    return self.groupName ?: self.url.host;
+}
+
+- (VLCNetworkServerLoginInformation *)loginInformation
+{
+    VLCNetworkServerLoginInformation *login = [VLCNetworkServerLoginInformation loginInformationWithKeychainIdentifier: self.url.absoluteString];
+    NSError *error = nil;
+    if ([login loadLoginInformationFromKeychainWithError:&error]) {
+        if (login.username == nil) {
+            /* in case the username wasn't saved per directory, try for the entire server */
+            NSString *identifier = [NSString stringWithFormat:@"%@://%@", self.protocolIdentifier, self.url.host];
+            login = [VLCNetworkServerLoginInformation loginInformationWithKeychainIdentifier:identifier];
+            [login loadLoginInformationFromKeychainWithError:&error];
+            /* restore the trick from above so we open the actually requested directory */
+            login.address = [self.url.host stringByAppendingPathComponent:self.url.path];
+        }
+    }
+    return login;
+}
+
+@end
+
+@interface VLCFavoriteServer : VLCFavorite
+
+@property (readwrite, atomic) NSMutableArray *favorites;
+
+@end
+
+@implementation VLCFavoriteServer
+
+- (instancetype)initWithCoder:(NSCoder *)coder
+{
+    self = [super initWithCoder:coder];
+    if (self) {
+        self.favorites = [NSMutableArray arrayWithArray:[coder decodeObjectForKey:VLCFavoriteArray]];
+    }
+    return self;
+}
+
+- (void)encodeWithCoder:(NSCoder *)coder
+{
+    [super encodeWithCoder:coder];
+    [coder encodeObject:self.favorites forKey:VLCFavoriteArray];
+}
+
+@end
+
+@interface VLCFavoriteService ()
+{
+    NSMutableArray *_favoriteContentArray;
+    NSMutableArray *_serverIdentifierArray;
+    NSString *_filePath;
+}
+@end
+
+@implementation VLCFavoriteService
+
+- (instancetype)init
+{
+    self = [super init];
+    if (self) {
+        NSSearchPathDirectory directory;
+#if TARGET_OS_IOS
+        directory = NSLibraryDirectory;
+#else
+        // There is no permanent storage on tvOS, we need to store the favorites in the cache directory.
+        // This data may be erased without a warning when the space runs low on the physical device.
+        directory = NSCachesDirectory;
+#endif
+        NSArray *paths = NSSearchPathForDirectoriesInDomains(directory, NSUserDomainMask, YES);
+        NSString *libraryFolder = [paths firstObject];
+        _filePath = [libraryFolder stringByAppendingPathComponent:VLCFavoritesFile];
+
+        if ([[NSFileManager defaultManager] fileExistsAtPath:_filePath]) {
+            NSData *data = [[NSData alloc] initWithContentsOfFile:_filePath];
+            if (data != nil) {
+                NSKeyedUnarchiver *unarchiver = [[NSKeyedUnarchiver alloc] initForReadingFromData:data error:nil];
+                unarchiver.requiresSecureCoding = NO;
+                _favoriteContentArray = [unarchiver decodeObjectForKey:NSKeyedArchiveRootObjectKey];
+            }
+        }
+
+        NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
+
+        if (_favoriteContentArray == nil) {
+            _favoriteContentArray = [NSMutableArray array];
+            [defaults setBool:YES forKey:VLCTransitionedUPnPFavorites];
+        } else {
+            if (![defaults boolForKey:VLCTransitionedUPnPFavorites]) {
+                [self _transitionUPnPFavorites];
+                [defaults setBool:YES forKey:VLCTransitionedUPnPFavorites];
+            }
+        }
+
+        _serverIdentifierArray = [NSMutableArray arrayWithCapacity:_favoriteContentArray.count];
+        for (VLCFavoriteServer *server in _favoriteContentArray) {
+            [_serverIdentifierArray addObject:server.groupIdentifier];
+        }
+    }
+    return self;
+}
+
+- (void)_transitionUPnPFavorites
+{
+    for (VLCFavoriteServer *server in _favoriteContentArray) {
+        for (VLCFavorite *favorite in server.favorites) {
+            NSString *stringURL = favorite.url.absoluteString;
+            if ([stringURL hasPrefix:@"upnp://http//"]) {
+                stringURL = [stringURL stringByReplacingOccurrencesOfString:@"upnp://http//" withString:@"upnp://"];
+                [favorite setUrl:[NSURL URLWithString:stringURL]];
+            }
+        }
+    }
+    [self storeContent];
+}
+
+- (void)storeContent
+{
+    dispatch_async(dispatch_get_main_queue(), ^{
+        @synchronized (self->_favoriteContentArray) {
+            NSData *data = [NSKeyedArchiver archivedDataWithRootObject:self->_favoriteContentArray requiringSecureCoding:NO error:nil];
+            [data writeToFile:self->_filePath atomically:YES];
+        }
+        [[NSNotificationCenter defaultCenter] postNotificationName:VLCFavoriteServiceContentDidChange object:self];
+    });
+}
+
+- (void)storeContentSynchronously
+{
+    @synchronized (self->_favoriteContentArray) {
+        NSData *data = [NSKeyedArchiver archivedDataWithRootObject:self->_favoriteContentArray requiringSecureCoding:NO error:nil];
+        [data writeToFile:self->_filePath atomically:YES];
+    }
+}
+
+- (NSInteger)numberOfFavoritedServers
+{
+    return _serverIdentifierArray.count;
+}
+
+- (NSInteger)numberOfFavoritesOfServerAtIndex:(NSInteger)index
+{
+    VLCFavoriteServer *server;
+    @synchronized (_favoriteContentArray) {
+        if (index < _favoriteContentArray.count) {
+            server = _favoriteContentArray[index];
+        } else {
+            return 0;
+        }
+    }
+    return server.favorites.count;
+}
+
+- (NSString *)nameOfFavoritedServerAtIndex:(NSInteger)index
+{
+    VLCFavoriteServer *server;
+    @synchronized (_favoriteContentArray) {
+        if (index < _favoriteContentArray.count) {
+            server = _favoriteContentArray[index];
+        } else {
+            return @"";
+        }
+    }
+    return [self userVisibleNameForGroupIdentifier:server.userVisibleName];
+}
+
+- (NSString *)userVisibleNameForGroupIdentifier:(NSString *)identifier
+{
+    if ([identifier isEqualToString:VLCFavoriteGroupRadio]) {
+        return NSLocalizedString(@"RADIO", nil);
+    }
+    return identifier;
+}
+
+- (void)setName:(NSString *)name ofFavoritedServerAtIndex:(NSInteger)index
+{
+    @synchronized (_favoriteContentArray) {
+        VLCFavoriteServer *server = _favoriteContentArray[index];
+        server.userVisibleName = name;
+        _favoriteContentArray[index] = server;
+    }
+    [self storeContent];
+}
+
+- (NSArray<VLCFavorite *> *)favoritesInGroupWithIdentifier:(NSString *)identifier
+{
+    @synchronized (_favoriteContentArray) {
+        NSInteger serverIndex = [_serverIdentifierArray indexOfObject:identifier];
+        if (serverIndex == NSNotFound) {
+            return @[];
+        }
+        VLCFavoriteServer *server = _favoriteContentArray[serverIndex];
+        return server.favorites;
+    }
+}
+
+- (VLCFavorite *)favoriteOfServerWithIndex:(NSInteger)serverIndex atIndex:(NSInteger)favoriteIndex
+{
+    VLCFavoriteServer *server;
+    @synchronized (_favoriteContentArray) {
+        if (serverIndex < _favoriteContentArray.count) {
+            server = _favoriteContentArray[serverIndex];
+        } else {
+            return nil;
+        }
+    }
+    NSArray *favorites = server.favorites;
+    if (favoriteIndex < favorites.count) {
+        return favorites[favoriteIndex];
+    }
+    return nil;
+}
+
+- (void)addFavorite:(VLCFavorite *)favorite
+{
+    VLCFavoriteServer *server;
+    NSString *identifier = favorite.groupIdentifier;
+    if (!identifier) {
+        NSAssert(!identifier, @"invalid url for favorite");
+        return;
+    }
+    @synchronized (_favoriteContentArray) {
+        NSInteger serverIndex = [_serverIdentifierArray indexOfObject:identifier];
+        if (serverIndex == NSNotFound) {
+            server = [[VLCFavoriteServer alloc] init];
+            server.groupName = favorite.groupName;
+            server.userVisibleName = identifier;
+            server.url = [NSURL URLWithString:[NSString stringWithFormat:@"%@://%@", favorite.url.scheme, favorite.url.host]];
+            server.favorites = [NSMutableArray array];
+            [_serverIdentifierArray addObject:identifier];
+        } else {
+            server = _favoriteContentArray[serverIndex];
+        }
+        [server.favorites addObject:favorite];
+        if (serverIndex == NSNotFound) {
+            [_favoriteContentArray addObject:server];
+        } else {
+            [_favoriteContentArray replaceObjectAtIndex:serverIndex withObject:server];
+        }
+    }
+    [self storeContent];
+}
+
+- (void)removeFavorite:(VLCFavorite *)favorite
+{
+    VLCFavoriteServer *server;
+    NSString *identifier = favorite.groupIdentifier;
+    if (!identifier) {
+        NSAssert(!identifier, @"invalid url for favorite");
+        return;
+    }
+    @synchronized (_favoriteContentArray) {
+        NSInteger serverIndex = [_serverIdentifierArray indexOfObject:identifier];
+        if (serverIndex == NSNotFound) {
+            NSAssert(serverIndex == NSNotFound, @"No server for identifier");
+            return;
+        }
+        server = _favoriteContentArray[serverIndex];
+        NSArray *favorites = server.favorites;
+        NSUInteger count = favorites.count;
+        for (NSUInteger index = 0; index < count; index++) {
+            VLCFavorite *iter = favorites[index];
+            if ([iter.url isEqual: favorite.url]) {
+                [server.favorites removeObjectAtIndex:index];
+                if (server.favorites.count == 0) {
+                    [_favoriteContentArray removeObjectAtIndex:serverIndex];
+                    [_serverIdentifierArray removeObjectAtIndex:serverIndex];
+                } else {
+                    [_favoriteContentArray replaceObjectAtIndex:serverIndex withObject:server];
+                }
+                break;
+            }
+        }
+    }
+    [self storeContent];
+}
+
+- (void)playFavorite:(VLCFavorite *)favorite
+{
+    VLCMedia *media = [VLCMedia mediaWithURL:favorite.url];
+    if (!media) {
+        return;
+    }
+
+    media.metaData.title = favorite.userVisibleName;
+    if (favorite.artworkURL) {
+        media.metaData.artworkURL = favorite.artworkURL;
+    }
+
+    VLCMediaList *mediaList = [[VLCMediaList alloc] init];
+    [mediaList addMedia:media];
+
+    VLCPlaybackService *playbackService = [VLCPlaybackService sharedInstance];
+    playbackService.expectsAudioOnlyContent = [favorite.groupIdentifier isEqualToString:VLCFavoriteGroupRadio];
+    [playbackService playMediaList:mediaList firstIndex:0 subtitlesFilePath:nil];
+
+    [self markFavoriteAsPlayed:favorite];
+}
+
+- (void)markFavoriteAsPlayed:(VLCFavorite *)favorite
+{
+    NSString *identifier = favorite.groupIdentifier;
+    if (!identifier) {
+        return;
+    }
+    @synchronized (_favoriteContentArray) {
+        NSInteger serverIndex = [_serverIdentifierArray indexOfObject:identifier];
+        if (serverIndex == NSNotFound) {
+            return;
+        }
+        VLCFavoriteServer *server = _favoriteContentArray[serverIndex];
+        NSMutableArray *favorites = server.favorites;
+        NSUInteger count = favorites.count;
+        for (NSUInteger index = 0; index < count; index++) {
+            VLCFavorite *iter = favorites[index];
+            if ([iter.url isEqual:favorite.url]) {
+                iter.lastPlayedDate = [NSDate date];
+                if (index != 0) {
+                    [favorites removeObjectAtIndex:index];
+                    [favorites insertObject:iter atIndex:0];
+                    [_favoriteContentArray replaceObjectAtIndex:serverIndex withObject:server];
+                }
+                break;
+            }
+        }
+    }
+    [self storeContent];
+}
+
+- (void)removeFavoriteOfServerWithIndex:(NSInteger)serverIndex atIndex:(NSInteger)favoriteIndex
+{
+    @synchronized (_favoriteContentArray) {
+        VLCFavoriteServer *server = _favoriteContentArray[serverIndex];
+        [server.favorites removeObjectAtIndex:favoriteIndex];
+        if (server.favorites.count == 0) {
+            [_favoriteContentArray removeObjectAtIndex:serverIndex];
+            [_serverIdentifierArray removeObjectAtIndex:serverIndex];
+        } else {
+            [_favoriteContentArray replaceObjectAtIndex:serverIndex withObject:server];
+        }
+    }
+    [self storeContent];
+}
+
+- (BOOL)isFavoriteURL:(NSURL *)url
+{
+    @synchronized (_favoriteContentArray) {
+        for (VLCFavoriteServer *server in _favoriteContentArray) {
+            for (VLCFavorite *favorite in server.favorites) {
+                if ([favorite.url isEqual:url]) {
+                    return YES;
+                }
+            }
+        }
+    }
+    return NO;
+}
+
+@end

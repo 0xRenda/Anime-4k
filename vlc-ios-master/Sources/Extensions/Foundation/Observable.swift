@@ -1,0 +1,61 @@
+/*****************************************************************************
+ * Observable.swift
+ * VLC for iOS
+ *****************************************************************************
+ * Copyright © 2019 VideoLAN. All rights reserved.
+ * Copyright © 2019 Videolabs
+ *
+ * Authors: Soomin Lee <bubu # mikan.io>
+ *          Craig Reyenga <craig.reyenga # gmail.com>
+ *
+ * Refer to the COPYING file of the official project for license.
+ *****************************************************************************/
+
+class VLCObservable<T: AnyObject> {
+    // Using ObjectIdentifier to avoid duplication and facilitate identification of observing object
+    private var observers = [ObjectIdentifier: VLCObserver<T>]()
+    private let lock = NSRecursiveLock()
+
+    func addObserver(_ observer: T) {
+        lock.lock()
+        defer { lock.unlock() }
+        let identifier = ObjectIdentifier(observer)
+        observers[identifier] = VLCObserver(observer)
+    }
+
+    func removeObserver(_ observer: T) {
+        lock.lock()
+        defer { lock.unlock() }
+        let identifier = ObjectIdentifier(observer)
+        observers.removeValue(forKey: identifier)
+    }
+
+    /// Notify observers by executing the provided action upon each.
+    /// - Parameter action: the action to execute upon each observer
+    func notifyObservers(action: (T) -> Void) {
+        lock.lock()
+        // Snapshot observers before iterating so we can detect observers that
+        // have been removed as a side effect of calling out to a previous
+        // observer while allowing safe concurrent add/remove.
+        let snapshot = observers
+        lock.unlock()
+
+        for (_, wrapper) in snapshot {
+            guard let observer = wrapper.observer else { continue }
+            action(observer)
+        }
+    }
+
+}
+
+// MARK: - Observer
+
+// Since weak is a property assigned to anything that is of class type and not struct
+// you have to explicitly constraint your generic parameter to be of class type
+fileprivate class VLCObserver<T: AnyObject> {
+   weak var observer: T?
+
+   init(_ observer: T) {
+       self.observer = observer
+   }
+}

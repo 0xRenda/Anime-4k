@@ -1,0 +1,221 @@
+/*****************************************************************************
+ * VLCWatchConnectivityService.swift
+ * VLC for iOS
+ *****************************************************************************
+ * Copyright (c) 2026 VideoLAN. All rights reserved.
+ * $Id$
+ *
+ * Authors: Timmy Nguyen <timmypass21 # gmail.com>
+ *
+ * Refer to the COPYING file of the official project for license.
+ *****************************************************************************/
+
+import Foundation
+import WatchConnectivity
+
+
+@objc class VLCWatchConnectivityService: NSObject {
+
+    // Update the app context if the session is activated, and update UI with the command status.
+    func updateAppContext(_ context: [String: Any]) {
+        var message = VLCWatchMessage(command: .updateAppContext, phrase: .updated)
+        message.timedColor = TimedColor(context)
+
+        guard WCSession.default.activationState == .activated else {
+            return handleSessionUnactivated(with: message)
+        }
+
+        do {
+            try WCSession.default.updateApplicationContext(context)
+        } catch {
+            message.phrase = .failed
+            message.errorMessage = error.localizedDescription
+        }
+        postNotificationOnMainQueueAsync(name: .dataDidFlow, object: message)
+    }
+
+    // Send a message if the session is activated, and update the UI with the command status.
+    func sendMessage(_ message: [String: Any]) {
+        var vlcMessage = VLCWatchMessage(command: .sendMessage, phrase: .sent)
+        vlcMessage.timedColor = TimedColor(message)
+
+        guard WCSession.default.activationState == .activated else {
+            return handleSessionUnactivated(with: vlcMessage)
+        }
+
+        // A reply handler block runs asynchronously on a background thread and should return quickly.
+        WCSession.default.sendMessage(message, replyHandler: { replyMessage in
+            vlcMessage.phrase = .replied
+            vlcMessage.timedColor = TimedColor(replyMessage)
+            self.postNotificationOnMainQueueAsync(name: .dataDidFlow, object: vlcMessage)
+        }, errorHandler: { error in
+            vlcMessage.phrase = .failed
+            vlcMessage.errorMessage = error.localizedDescription
+            self.postNotificationOnMainQueueAsync(name: .dataDidFlow, object: vlcMessage)
+        })
+        postNotificationOnMainQueueAsync(name: .dataDidFlow, object: vlcMessage)
+    }
+
+    // Send a piece of message data if the session is activated, and update the UI with the command status.
+    func sendMessageData(_ messageData: Data) {
+        var message = VLCWatchMessage(command: .sendMessageData, phrase: .sent)
+        message.timedColor = TimedColor(messageData)
+
+        guard WCSession.default.activationState == .activated else {
+            return handleSessionUnactivated(with: message)
+        }
+
+        // A reply handler block runs asynchronously on a background thread and should return quickly.
+        WCSession.default.sendMessageData(messageData, replyHandler: { replyData in
+            message.phrase = .replied
+            message.timedColor = TimedColor(replyData)
+            self.postNotificationOnMainQueueAsync(name: .dataDidFlow, object: message)
+        }, errorHandler: { error in
+            message.phrase = .failed
+            message.errorMessage = error.localizedDescription
+            self.postNotificationOnMainQueueAsync(name: .dataDidFlow, object: message)
+        })
+        postNotificationOnMainQueueAsync(name: .dataDidFlow, object: message)
+    }
+
+    // Transfer a piece of user info if the session is activated, and update the UI with the command status.
+    // Returns a WCSessionUserInfoTransfer object to monitor the progress or cancel the operation.
+    func transferUserInfo(_ userInfo: [String: Any]) {
+        var message = VLCWatchMessage(command: .transferUserInfo, phrase: .transferring)
+        message.payload = userInfo
+//        message.timedColor = TimedColor(userInfo)
+
+        guard WCSession.default.activationState == .activated else {
+            return handleSessionUnactivated(with: message)
+        }
+
+        message.userInfoTranser = WCSession.default.transferUserInfo(userInfo)
+        postNotificationOnMainQueueAsync(name: .dataDidFlow, object: message)
+    }
+
+    // Transfer a file if the session is activated, and update the UI with the command status.
+    // Return a WCSessionFileTransfer object to monitor the progress or cancel the operation.
+    func transferFile(_ file: URL, metadata: [String: Any]) {
+        var message = VLCWatchMessage(command: .transferFile, phrase: .transferring)
+//        message.timedColor = TimedColor(metadata)
+        message.payload = metadata
+
+        guard WCSession.default.activationState == .activated else {
+            return handleSessionUnactivated(with: message)
+        }
+
+        let fileTransfer = WCSession.default.transferFile(file, metadata: metadata)
+        message.fileTransfer = fileTransfer
+        postNotificationOnMainQueueAsync(name: .dataDidFlow, object: message)
+        DispatchQueue.main.async {
+            NotificationCenter.default.post(name: .fileTransferDidStart, object: fileTransfer)
+        }
+    }
+
+    // Transfer a piece of user info for current complications if the session is activated,
+    // and update the UI with the command status.
+    // Return a WCSessionUserInfoTransfer object to monitor the progress or cancel the operation.
+    func transferCurrentComplicationUserInfo(_ userInfo: [String: Any]) {
+        var message = VLCWatchMessage(command: .transferCurrentComplicationUserInfo, phrase: .failed)
+        message.timedColor = TimedColor(userInfo)
+
+        guard WCSession.default.activationState == .activated else {
+            return handleSessionUnactivated(with: message)
+        }
+
+        message.errorMessage = "Not supported on watchOS!"
+
+        #if os(iOS)
+        if WCSession.default.isComplicationEnabled {
+            let userInfoTranser = WCSession.default.transferCurrentComplicationUserInfo(userInfo)
+            message.phrase = .transferring
+            message.errorMessage = nil
+            message.userInfoTranser = userInfoTranser
+
+        } else {
+            message.errorMessage = "\nComplication is not enabled!"
+        }
+        #endif
+
+        postNotificationOnMainQueueAsync(name: .dataDidFlow, object: message)
+    }
+
+    // Post a notification on the main thread asynchronously.
+    private func postNotificationOnMainQueueAsync(name: NSNotification.Name, object: VLCWatchMessage? = nil) {
+        DispatchQueue.main.async {
+            NotificationCenter.default.post(name: name, object: object)
+        }
+    }
+
+    // Handle unactivated session error. WCSession commands require an activated session.
+    private func handleSessionUnactivated(with message: VLCWatchMessage) {
+        var mutableMessage = message
+        mutableMessage.phrase = .failed
+        mutableMessage.errorMessage = "WCSession is not activated yet!"
+        postNotificationOnMainQueueAsync(name: .dataDidFlow, object: mutableMessage)
+    }
+
+    func transferMediaLibraryFile() {
+#if (os(iOS)) && !NO_WATCH
+        guard let libraryDirectory = FileManager.default.urls(for: .libraryDirectory, in: .userDomainMask).first else {
+            return
+        }
+
+        let databaseURL = libraryDirectory
+            .appendingPathComponent("MediaLibrary")
+            .appendingPathComponent(kVLCMediaLibraryDBFileName)
+
+        if FileManager.default.fileExists(atPath: databaseURL.path) {
+            let librarySyncId: String
+
+            if let existingId = UserDefaults.standard.string(forKey: kVLCMediaLibrarySyncID) {
+                librarySyncId = existingId
+            } else {
+                let newId = UUID().uuidString
+                UserDefaults.standard.set(newId, forKey: kVLCMediaLibrarySyncID)
+                librarySyncId = newId
+            }
+
+            let payload: [String: Any] = [
+                kVLCWatchMessageType: WatchMessageType.transferiPhoneMediaLibraryDBFile.rawValue,
+                kVLCMediaLibrarySyncID: librarySyncId
+            ]
+
+            self.transferFile(databaseURL, metadata: payload)
+        }
+#endif
+    }
+
+    @objc func transferMediaLibraryFileIfNeeded() {
+        let defaults = UserDefaults.standard
+        let lastUpdated = defaults.object(forKey: kVLCSettingAutomaticallySyncMediaLibraryLastUpdated) as? Date
+        let frequency = defaults.integer(forKey: kVLCSettingAutomaticallySyncMediaLibrary)
+
+        guard frequency != kVLCSettingAutomaticallySyncMediaLibraryNever else { return }
+
+        guard let lastUpdated else {
+            transferMediaLibraryFile()
+            return
+        }
+
+        let offset: TimeInterval
+        let oneDay: TimeInterval = 60 * 60 * 24
+
+        if frequency == kVLCSettingAutomaticallySyncMediaLibrary24HR {
+            offset = oneDay
+        } else if frequency == kVLCSettingAutomaticallySyncMediaLibrary3D {
+            offset = oneDay * 3
+        } else if frequency == kVLCSettingAutomaticallySyncMediaLibrary7D {
+            offset = oneDay * 7
+        } else {
+            offset = 0
+        }
+
+        let now = Date()
+        let due = lastUpdated.addingTimeInterval(offset)
+
+        if due <= now {
+            transferMediaLibraryFile()
+        }
+    }
+}

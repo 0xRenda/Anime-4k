@@ -1,0 +1,642 @@
+/*****************************************************************************
+ * AudioPlayerViewController.swift
+ * VLC for iOS
+ *****************************************************************************
+ * Copyright © 2022-2023 VLC authors and VideoLAN
+ *
+ * Authors: Diogo Simao Marques <dogo@videolabs.io>
+ *
+ * Refer to the COPYING file of the official project for license.
+ *****************************************************************************/
+
+import UIKit
+
+#if os(iOS)
+import WidgetKit
+#endif
+
+@objc(VLCAudioPlayerViewControllerDelegate)
+protocol AudioPlayerViewControllerDelegate: AnyObject {
+    func audioPlayerViewControllerDidMinimize(_ audioPlayerViewController: AudioPlayerViewController)
+    func audioPlayerViewControllerDidClose(_ audioPlayerViewController: AudioPlayerViewController)
+    func audioPlayerViewControllerShouldBeDisplayed(_ audioPlayerViewController: AudioPlayerViewController) -> Bool
+    func audioPlayerViewControllerShouldSwitchPlayer(_ audioPlayerViewController: AudioPlayerViewController)
+}
+
+@objc(VLCAudioPlayerViewController)
+class AudioPlayerViewController: PlayerViewController {
+    // MARK: - Properties
+
+    @objc weak var delegate: AudioPlayerViewControllerDelegate?
+
+    private var isQueueHidden: Bool = true
+
+
+    override var supportedInterfaceOrientations: UIInterfaceOrientationMask {
+        get { return UIInterfaceOrientationMask.allButUpsideDown }
+    }
+
+    override var preferredStatusBarStyle: UIStatusBarStyle {
+        return .lightContent
+    }
+
+    override var canBecomeFirstResponder: Bool {
+        return true
+    }
+
+    lazy var audioPlayerView: AudioPlayerView = {
+        let audioPlayerView = AudioPlayerView(frame: .zero)
+        audioPlayerView.delegate = self
+        return audioPlayerView
+    }()
+
+    private lazy var moreOptionsButton: UIButton = {
+        let moreOptionsButton = UIButton(type: .custom)
+        moreOptionsButton.setImage(UIImage(named: "iconMoreOptions"), for: .normal)
+        moreOptionsButton.setContentHuggingPriority(.defaultHigh, for: .horizontal)
+        moreOptionsButton.addTarget(self, action: #selector(handleMoreOptionsButton), for: .touchUpInside)
+        moreOptionsButton.accessibilityIdentifier = VLCAccessibilityIdentifier.moreOptions
+        return moreOptionsButton
+    }()
+
+    // MARK: - Init
+
+#if os(iOS)
+    @objc init(mediaLibraryService: MediaLibraryService,
+               rendererDiscovererManager: VLCRendererDiscovererManager,
+               playerController: PlayerController) {
+        super.init(mediaLibraryService: mediaLibraryService,
+                   rendererDiscovererManager: rendererDiscovererManager,
+                   playerController: playerController,
+                   isBrightnessControlAvailable: false)
+
+        self.playerController.delegate = self
+        mediaNavigationBar.addMoreOptionsButton(moreOptionsButton)
+        audioPlayerView.setupNavigationBar(with: mediaNavigationBar)
+        audioPlayerView.updateThumbnailImageView()
+        refreshPlaybackSpeed()
+        audioPlayerView.setupBackgroundColor()
+        mediaScrubProgressBar.updateBackgroundAlpha(with: 0.0)
+        audioPlayerView.setupProgressView(with: mediaScrubProgressBar)
+        audioPlayerView.setupExternalOutputView(with: externalOutputView)
+        setupAudioPlayerViewConstraints()
+        setupOptionsNavigationBar()
+        setupSliders()
+        setupStatusLabel()
+        setupConeLoadingView()
+    }
+#else
+    @objc override init(mediaLibraryService: MediaLibraryService, playerController: PlayerController) {
+        super.init(mediaLibraryService: mediaLibraryService, playerController: playerController)
+
+        self.playerController.delegate = self
+        mediaNavigationBar.addMoreOptionsButton(moreOptionsButton)
+        audioPlayerView.setupNavigationBar(with: mediaNavigationBar)
+        audioPlayerView.updateThumbnailImageView()
+        refreshPlaybackSpeed()
+        audioPlayerView.setupBackgroundColor()
+        mediaScrubProgressBar.updateBackgroundAlpha(with: 0.0)
+        audioPlayerView.setupProgressView(with: mediaScrubProgressBar)
+        audioPlayerView.setupExternalOutputView(with: externalOutputView)
+        setupAudioPlayerViewConstraints()
+        setupOptionsNavigationBar()
+        setupStatusLabel()
+        setupConeLoadingView()
+    }
+#endif
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        navigationController?.navigationBar.isHidden = true
+        playbackService.delegate = self
+        playbackService.recoverPlaybackState()
+        audioPlayerView.updateThumbnailImageView()
+        audioPlayerView.setupBackgroundColor()
+        refreshPlaybackSpeed()
+        mediaScrubProgressBar.updateInterfacePosition()
+        playModeUpdated()
+
+        if playbackService.isPlayingOnExternalScreen() {
+            changeOutputView(to: externalOutputView.displayView)
+        }
+
+        let isLandscape = view.bounds.width > view.bounds.height
+        audioPlayerView.updateLayout(isLandscape: isLandscape)
+        mediaScrubProgressBar.shouldHideScrubLabels = isLandscape
+    }
+
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+
+        audioPlayerView.resetCornerRadius()
+    }
+
+    override func viewWillDisappear(_ animated: Bool) {
+        if playerController.isInterfaceLocked {
+            setPlayerInterfaceEnabled(true)
+        }
+        queueViewController?.hide()
+        numberOfGestureSeek = 0
+        totalSeekDuration = 0
+        previousSeekState = .default
+    }
+
+    override func viewWillTransition(to size: CGSize, with coordinator: UIViewControllerTransitionCoordinator) {
+        super.viewWillTransition(to: size, with: coordinator)
+
+        let isLandscape = size.width > size.height
+        coordinator.animate(alongsideTransition: { [weak self] _ in
+            self?.audioPlayerView.updateLayout(isLandscape: isLandscape)
+            self?.mediaScrubProgressBar.shouldHideScrubLabels = isLandscape
+        })
+    }
+
+    // MARK: Public methods
+
+    override func minimizePlayer() {
+        delegate?.audioPlayerViewControllerDidMinimize(self)
+    }
+
+    override var resetsPositionOnMinimize: Bool {
+        return true
+    }
+    
+    override func updatePlaybackSpeedIcon() {
+        super.updatePlaybackSpeedIcon()
+        refreshPlaybackSpeed()
+    }
+
+    private func refreshPlaybackSpeed() {
+        let playbackSpeed = playbackService.playbackRate
+        audioPlayerView.updatePlaybackSpeedButton(with: playbackSpeed)
+        audioPlayerView.shouldDisplaySecondaryStackView(abs(playbackSpeed - 1) > 0.001)
+    }
+
+    @objc func setupQueueViewController(with qvc: QueueViewController) {
+        queueViewController = qvc
+        queueViewController?.delegate = nil
+    }
+
+    @objc func handleMoreOptionsButton() {
+        present(moreOptionsActionSheet, animated: false) {
+            [unowned self] in
+            self.moreOptionsActionSheet.interfaceDisabled = self.playerController.isInterfaceLocked
+        }
+    }
+
+    override func setupGestures() {
+        super.setupGestures()
+
+        audioPlayerView.thumbnailView.addGestureRecognizer(panRecognizer)
+        audioPlayerView.thumbnailView.addGestureRecognizer(leftSwipeRecognizer)
+        audioPlayerView.thumbnailView.addGestureRecognizer(rightSwipeRecognizer)
+        audioPlayerView.thumbnailView.addGestureRecognizer(doubleTapGestureRecognizer)
+        audioPlayerView.addGestureRecognizer(playPauseRecognizer)
+        audioPlayerView.addGestureRecognizer(pinchRecognizer)
+        
+        panRecognizer.delegate = self
+        leftSwipeRecognizer.delegate = self
+        rightSwipeRecognizer.delegate = self
+    }
+
+    @objc override func handlePinchGesture(recognizer: UIPinchGestureRecognizer) {
+        if recognizer.velocity < 0 && playerController.isCloseGestureEnabled {
+            delegate?.audioPlayerViewControllerDidMinimize(self)
+        }
+    }
+
+#if os(iOS)
+    override func changeOutputView(to output: UIView?) {
+        guard output == externalOutputView.displayView else {
+            externalOutputView.isHidden = true
+            audioPlayerView.thumbnailView.isHidden = false
+            return
+        }
+
+        if let renderer = playbackService.renderer {
+            externalOutputView.updateUI(rendererName: renderer.name, title: nil)
+            externalOutputView.isHidden = false
+            audioPlayerView.thumbnailView.isHidden = true
+        }
+    }
+#endif
+
+    override func handleDoubleTapGesture(_ sender: UITapGestureRecognizer) {
+        let screenWidth: CGFloat = view.frame.size.width
+        let middleBoundary: CGFloat = screenWidth / 2.0
+
+        let tapPosition = sender.location(in: view)
+
+        // Reset number(set to -1/1) of seek when orientation has been changed.
+        if tapPosition.x < middleBoundary {
+            numberOfGestureSeek = previousSeekState == .forward ? -1 : numberOfGestureSeek - 1
+        } else {
+            numberOfGestureSeek = previousSeekState == .backward ? 1 : numberOfGestureSeek + 1
+        }
+
+        super.handleDoubleTapGesture(sender)
+    }
+
+    override func applyCornerRadius() {
+        super.applyCornerRadius()
+
+        audioPlayerView.applyCornerRadius()
+    }
+
+    override func resetCornerRadius() {
+        super.resetCornerRadius()
+
+        audioPlayerView.resetCornerRadius()
+    }
+
+    // MARK: - Private methods
+
+    private func setupAudioPlayerViewConstraints() {
+        audioPlayerView.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(audioPlayerView)
+
+        NSLayoutConstraint.activate([
+            audioPlayerView.topAnchor.constraint(equalTo: view.topAnchor),
+            audioPlayerView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            audioPlayerView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            audioPlayerView.bottomAnchor.constraint(equalTo: view.bottomAnchor)
+        ])
+    }
+
+    private func setupOptionsNavigationBar() {
+        let padding: CGFloat = 10.0
+
+        view.addSubview(optionsNavigationBar)
+        NSLayoutConstraint.activate([
+            optionsNavigationBar.topAnchor.constraint(equalTo: audioPlayerView.navigationBarView.bottomAnchor, constant: padding),
+            optionsNavigationBar.trailingAnchor.constraint(equalTo: audioPlayerView.safeAreaLayoutGuide.trailingAnchor, constant: -padding)
+        ])
+    }
+
+#if os(iOS)
+    private func setupSliders() {
+        audioPlayerView.setupSliders(with: brightnessControlView, and: volumeControlView)
+
+        NSLayoutConstraint.activate([
+            brightnessControlView.topAnchor.constraint(greaterThanOrEqualTo: optionsNavigationBar.bottomAnchor),
+            volumeControlView.topAnchor.constraint(greaterThanOrEqualTo: optionsNavigationBar.bottomAnchor)
+        ])
+    }
+#endif
+
+    private func setupStatusLabel() {
+        audioPlayerView.addSubview(statusLabel)
+        audioPlayerView.bringSubviewToFront(statusLabel)
+
+        NSLayoutConstraint.activate([
+            statusLabel.centerXAnchor.constraint(equalTo: audioPlayerView.centerXAnchor),
+            statusLabel.centerYAnchor.constraint(equalTo: audioPlayerView.centerYAnchor)
+        ])
+    }
+
+    private func setupConeLoadingView() {
+        audioPlayerView.addSubview(coneLoadingView)
+        audioPlayerView.bringSubviewToFront(coneLoadingView)
+
+        NSLayoutConstraint.activate([
+            coneLoadingView.centerXAnchor.constraint(equalTo: audioPlayerView.thumbnailImageView.centerXAnchor),
+            coneLoadingView.centerYAnchor.constraint(equalTo: audioPlayerView.thumbnailImageView.centerYAnchor),
+            coneLoadingView.widthAnchor.constraint(equalTo: audioPlayerView.thumbnailImageView.widthAnchor),
+            coneLoadingView.heightAnchor.constraint(equalTo: audioPlayerView.thumbnailImageView.heightAnchor)
+        ])
+    }
+
+    private func showPlayqueue(from qvc: QueueViewController) {
+        qvc.view.removeFromSuperview()
+        qvc.removeFromParent()
+        qvc.show()
+        qvc.topView.isHidden = true
+        addChild(qvc)
+        qvc.didMove(toParent: self)
+        view.layoutIfNeeded()
+        qvc.bottomConstraint?.constant = 0
+        UIView.animate(withDuration: 0.3, animations: {
+            self.view.layoutIfNeeded()
+        })
+        qvc.delegate = nil
+    }
+
+    private func updateNavigationBar(with title: String?) {
+        mediaNavigationBar.setMediaTitleLabelText(title)
+        updateFavoriteButton()
+    }
+
+    private func setPlayerInterfaceEnabled(_ enabled: Bool) {
+        mediaNavigationBar.closePlaybackButton.isEnabled = enabled
+        mediaNavigationBar.favoriteButton.isEnabled = enabled
+        mediaNavigationBar.queueButton.isEnabled = enabled
+#if os(iOS)
+        mediaNavigationBar.deviceButton.isEnabled = enabled
+        mediaNavigationBar.airplayRoutePickerView.isUserInteractionEnabled = enabled
+        mediaNavigationBar.airplayRoutePickerView.alpha = !enabled ? 0.5 : 1
+#else
+        mediaNavigationBar.airplayVolumeView.isUserInteractionEnabled = enabled
+        mediaNavigationBar.airplayVolumeView.alpha = !enabled ? 0.5 : 1
+#endif
+
+        mediaScrubProgressBar.progressSlider.isEnabled = enabled
+        mediaScrubProgressBar.remainingTimeButton.isEnabled = enabled
+
+        audioPlayerView.setControlsEnabled(enabled)
+
+        shouldDisableGestures(!enabled)
+        minimizeGestureRecognizer.isEnabled = enabled
+
+        playerController.isInterfaceLocked = !enabled
+    }
+
+    @objc override func updatePlayerControls() {
+        audioPlayerView.shouldEnableSeekButtons(playbackService.mediaList.count == 1)
+    }
+}
+
+// MARK: - AudioPlayerViewDelegate
+
+extension AudioPlayerViewController: AudioPlayerViewDelegate {
+    func audioPlayerViewDelegateGetThumbnail(_ audioPlayerView: AudioPlayerView) -> UIImage? {
+        guard let image = playbackService.metadata.artworkImage else {
+            return PresentationTheme.current.isDark ? UIImage(named: "song-placeholder-dark")
+                                                    : UIImage(named: "song-placeholder-white")
+        }
+
+        return image
+    }
+
+    func audioPlayerViewDelegateDidTapShuffleButton(_ audioPlayerView: AudioPlayerView) {
+        updateShuffleState()
+    }
+
+    func audioPlayerViewDelegateDidTapBackwardButton(_ audioPlayerView: AudioPlayerView) {
+        totalSeekDuration = previousSeekState == .forward ? -seekBackwardBy : totalSeekDuration - seekBackwardBy
+        previousSeekState = .backward
+
+        displayAndApplySeekDuration(seekBackwardBy)
+    }
+
+    func audioPlayerViewDelegateDidTapPreviousButton(_ audioPlayerView: AudioPlayerView) {
+        playbackService.previous()
+    }
+
+    func audioPlayerViewDelegateDidTapPlayButton(_ audioPlayerView: AudioPlayerView) {
+        playbackService.playPause()
+        audioPlayerView.updatePlayButton(isPlaying: playbackService.isPlaying)
+    }
+
+    func audioPlayerViewDelegateDidTapNextButton(_ audioPlayerView: AudioPlayerView) {
+        playbackService.next()
+    }
+
+    func audioPlayerViewDelegateDidTapForwardButton(_ audioPlayerView: AudioPlayerView) {
+        totalSeekDuration = previousSeekState == .backward ? seekForwardBy : totalSeekDuration + seekForwardBy
+        previousSeekState = .forward
+
+        displayAndApplySeekDuration(seekForwardBy)
+    }
+
+    func audioPlayerViewDelegateDidTapRepeatButton(_ audioPlayerView: AudioPlayerView) {
+        updateRepeatMode()
+    }
+
+    func audioPlayerViewDelegateDidTapPlaybackSpeedButton(_ audioPlayerView: AudioPlayerView) {
+        showPlaybackSpeedCard()
+    }
+
+    func audioPlayerViewDelegateDidLongPressPlaybackSpeedButton(_ audioPlayerView: AudioPlayerView) {
+        let speedManager = PlaybackSpeedCustomManager.shared
+        playbackService.playbackRate = 1
+        if speedManager.appliesToAllMedia {
+            speedManager.setDefaultSpeed(1)
+        }
+        updatePlaybackSpeedIcon()
+    }
+
+}
+
+// MARK: - VLCPlaybackServiceDelegate
+
+extension AudioPlayerViewController {
+    func prepare(forMediaPlayback playbackService: PlaybackService) {
+        audioPlayerView.updatePlayButton(isPlaying: playbackService.isPlaying)
+        audioPlayerView.updateShuffleRepeatState(shuffleEnabled: playbackService.isShuffleMode, repeatMode: playbackService.repeatMode)
+
+        let metadata = playbackService.metadata
+        audioPlayerView.updateLabels(title: metadata.title, artist: metadata.artist, album: metadata.albumName, isQueueHidden: isQueueHidden)
+        updateNavigationBar(with: isQueueHidden ? nil : metadata.title)
+        mediaScrubProgressBar.updateLiveStreamState()
+
+        if let qvc = queueViewController, !isQueueHidden {
+            showPlayqueue(from: qvc)
+        }
+
+        audioPlayerView.thumbnailView.isHidden = playbackService.isPlayingOnExternalScreen()
+    }
+
+    override func mediaPlayerStateChanged(_ currentState: VLCMediaPlayerState,
+                                 isPlaying: Bool,
+                                 currentMediaHasTrackToChooseFrom: Bool, currentMediaHasChapters: Bool,
+                                 for playbackService: PlaybackService) {
+        super.mediaPlayerStateChanged(currentState, isPlaying: isPlaying,
+                                      currentMediaHasTrackToChooseFrom: currentMediaHasTrackToChooseFrom,
+                                      currentMediaHasChapters: currentMediaHasChapters,
+                                      for: playbackService)
+
+        audioPlayerView.updatePlayButton(isPlaying: isPlaying)
+        audioPlayerView.shouldEnableSeekButtons(playbackService.mediaList.count == 1)
+
+        let image: UIImage? = isPlaying ? UIImage(named: "minimize") : UIImage(named: "close")
+        let accessibilityLabel: String = isPlaying ? NSLocalizedString("MINIMIZE_BUTTON", comment: "") : NSLocalizedString("STOP_BUTTON", comment: "")
+        let accessibilityHint: String = isPlaying ? NSLocalizedString("MINIMIZE_HINT", comment: "") : NSLocalizedString("CLOSE_HINT", comment: "")
+        mediaNavigationBar.updateCloseButton(with: image, accessibility: (accessibilityLabel, accessibilityHint))
+
+        if currentState == .opening && playbackService.numberOfVideoTracks > 0 {
+            // This media contains video tracks and can be played with the Video Player.
+            delegate?.audioPlayerViewControllerShouldSwitchPlayer(self)
+            return
+        }
+
+        if let queueCollectionView = queueViewController?.queueCollectionView {
+            queueCollectionView.reloadData()
+        }
+
+        if currentState == .error {
+            statusLabel.showStatusMessage(NSLocalizedString("PLAYBACK_FAILED",
+                                                            comment: ""))
+        }
+
+        if currentState == .opening || currentState == .stopped {
+            resetABRepeat()
+        }
+
+        moreOptionsActionSheet.currentMediaHasChapters = currentMediaHasChapters
+    }
+
+    func displayMetadata(for playbackService: PlaybackService, metadata: VLCMetaData) {
+        audioPlayerView.updateLabels(title: metadata.title, artist: metadata.artist, album: metadata.albumName, isQueueHidden: isQueueHidden)
+        updateNavigationBar(with: isQueueHidden ? nil : metadata.title)
+        mediaScrubProgressBar.updateLiveStreamState()
+
+        if metadata.artworkImage != audioPlayerView.thumbnailImageView.image {
+            audioPlayerView.updateThumbnailImageView()
+            audioPlayerView.setupBackgroundColor()
+        }
+    }
+
+    func playModeUpdated() {
+        audioPlayerView.updateShuffleRepeatState(shuffleEnabled: playbackService.isShuffleMode, repeatMode: playbackService.repeatMode)
+    }
+
+#if os(iOS)
+    func updateWidgetsIfNeeded() {
+        let widgetCenter = WidgetCenter.shared
+        widgetCenter.getCurrentConfigurations({ result in
+            switch result {
+            case let .success(widgetInfo):
+                if !widgetInfo.isEmpty {
+                    widgetCenter.reloadAllTimelines()
+                }
+            case let .failure(error):
+                assertionFailure("AudioPlayerViewController: \(error)")
+            }
+        })
+    }
+#endif
+}
+
+// MARK: - PlayerControllerDelegate
+
+extension AudioPlayerViewController: PlayerControllerDelegate {
+    func playerControllerExternalScreenDidConnect(_ playerController: PlayerController) {
+        // TODO
+    }
+
+    func playerControllerExternalScreenDidDisconnect(_ playerController: PlayerController) {
+        // TODO
+    }
+
+    func playerControllerApplicationBecameActive(_ playerController: PlayerController) {
+        // TODO
+    }
+}
+
+// MARK: - MediaNavigationBarDelegate
+
+extension AudioPlayerViewController {
+    override func mediaNavigationBarDidTapClose(_ mediaNavigationBar: MediaNavigationBar) {
+        if playbackService.isPlaying {
+            delegate?.audioPlayerViewControllerDidMinimize(self)
+        } else {
+            playbackService.stopPlayback()
+            self.dismiss(animated: true)
+            isQueueHidden = true
+        }
+    }
+
+    func mediaNavigationBarDidToggleQueueView(_ mediaNavigationBar: MediaNavigationBar) {
+        let metadata = playbackService.metadata
+        audioPlayerView.updateLabels(title: metadata.title, artist: metadata.artist, album: metadata.albumName, isQueueHidden: !isQueueHidden)
+        updateNavigationBar(with: !isQueueHidden ? nil : metadata.title)
+
+        audioPlayerView.thumbnailView.isHidden = playbackService.isPlayingOnExternalScreen()
+        audioPlayerView.playqueueView.isHidden = !isQueueHidden
+
+        if let qvc = queueViewController, isQueueHidden {
+            showPlayqueue(from: qvc)
+        } else if let qvc = queueViewController, !isQueueHidden {
+            qvc.dismissFromAudioPlayer()
+        }
+
+        shouldDisableGestures(isQueueHidden)
+
+        isQueueHidden = !isQueueHidden
+    }
+
+    override func mediaNavigationBarDidCloseLongPress(_ mediaNavigationBar: MediaNavigationBar) {
+        super.mediaNavigationBarDidCloseLongPress(mediaNavigationBar)
+        isQueueHidden = true
+    }
+
+    func mediaNavigationBarDisplayCloseAlert(_ mediaNavigationBar: MediaNavigationBar) {
+        statusLabel.showStatusMessage(NSLocalizedString("CLOSE_HINT", comment: ""))
+    }
+}
+
+// MARK: - MediaMoreOptionsActionSheetDelegate
+
+extension AudioPlayerViewController {
+    override func mediaMoreOptionsActionSheetDidToggleInterfaceLock(state: Bool) {
+        super.mediaMoreOptionsActionSheetDidToggleInterfaceLock(state: state)
+
+        setPlayerInterfaceEnabled(!state)
+    }
+
+    override func mediaMoreOptionsActionSheetDisplayAddBookmarksView(_ bookmarksView: AddBookmarksView) {
+        super.mediaMoreOptionsActionSheetDisplayAddBookmarksView(bookmarksView)
+
+        if let bookmarksView = addBookmarksView {
+            view.addSubview(bookmarksView)
+            NSLayoutConstraint.activate([
+                bookmarksView.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+                bookmarksView.leadingAnchor.constraint(equalTo: audioPlayerView.safeAreaLayoutGuide.leadingAnchor),
+                bookmarksView.trailingAnchor.constraint(equalTo: audioPlayerView.safeAreaLayoutGuide.trailingAnchor),
+                bookmarksView.topAnchor.constraint(equalTo: audioPlayerView.safeAreaLayoutGuide.topAnchor, constant: 16),
+                bookmarksView.bottomAnchor.constraint(equalTo: audioPlayerView.controlsStackView.topAnchor),
+            ])
+        }
+
+        audioPlayerView.shouldDisableControls(true)
+    }
+
+    override func mediaMoreOptionsActionSheetRemoveAddBookmarksView() {
+        super.mediaMoreOptionsActionSheetRemoveAddBookmarksView()
+
+        audioPlayerView.shouldDisableControls(false)
+    }
+
+    override func mediaMoreOptionsActionSheetPresentABRepeatView(with abView: ABRepeatView) {
+        super.mediaMoreOptionsActionSheetPresentABRepeatView(with: abView)
+
+        guard let abRepeatView = abRepeatView else {
+            return
+        }
+
+        audioPlayerView.addSubview(abRepeatView)
+        audioPlayerView.bringSubviewToFront(abRepeatView)
+        abRepeatView.isUserInteractionEnabled = true
+        NSLayoutConstraint.activate([
+            abRepeatView.centerXAnchor.constraint(equalTo: audioPlayerView.safeAreaLayoutGuide.centerXAnchor),
+            abRepeatView.bottomAnchor.constraint(equalTo: mediaScrubProgressBar.topAnchor, constant: -10.0),
+        ])
+    }
+}
+
+// MARK: - ZoomTransitionEndpoint
+
+extension AudioPlayerViewController: ZoomTransitionEndpoint {
+    var zoomTransitionArtworkView: UIImageView? {
+        return audioPlayerView.thumbnailImageView
+    }
+}
+
+// MARK: - UIGestureRecognizerDelegate
+
+extension AudioPlayerViewController: UIGestureRecognizerDelegate {
+    func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer,
+                          shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer) -> Bool {
+        if (gestureRecognizer == panRecognizer &&
+            (otherGestureRecognizer == leftSwipeRecognizer || otherGestureRecognizer == rightSwipeRecognizer)) ||
+           ((gestureRecognizer == leftSwipeRecognizer || gestureRecognizer == rightSwipeRecognizer) &&
+            otherGestureRecognizer == panRecognizer) {
+            return true
+        }
+        return false
+    }
+}

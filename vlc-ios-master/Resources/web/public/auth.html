@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="theme-color" content="rgb(31,31,31)" media="(prefers-color-scheme: dark)"/>
+        <meta name="theme-color" content="rgb(242,242,247)" media="(prefers-color-scheme: light)"/>
+        <title>%%WEBINTF_TITLE%%</title>
+        <link rel="stylesheet" href="/public/common.css"/>
+        <link rel="stylesheet" href="/public/auth.css"/>
+        <script type="text/javascript" src="/public/jquery-1.10.1.min.js"></script>
+        <script type="text/javascript" src="/public/auth.js"></script>
+    </head>
+    <body>
+        <div id="header">
+            <div class="nav">
+                <a class="btn linkBtn" href="https://www.videolan.org" target="_blank"><div class="icon"></div></a>
+                %%WEBINTF_TITLE%%
+                <div class="rightSpace"> </div>
+            </div>
+        </div>
+        <div id="message">
+            %%WEBINTF_AUTH_REQUIRED%%
+        </div>
+        <form id="code_form">
+            <div id="loader"></div>
+            <input id="code" autocomplete="off" autofocus type="password" maxlength="%%WEBINTF_PASSCODE_LENGTH%%"/>
+            <div id="code_bgd" data-length="%%WEBINTF_PASSCODE_LENGTH%%"></div>
+        </form>
+    </body>
+</html>

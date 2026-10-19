@@ -1,0 +1,111 @@
+/*****************************************************************************
+ * VLCDonationNagScreenViewController.m
+ * VLC for iOS
+ *****************************************************************************
+ * Copyright (c) 2024 VideoLAN. All rights reserved.
+ * $Id$
+ *
+ * Authors: Felix Paul Kühne <fkuehne # videolan.org>
+ *
+ * Refer to the COPYING file of the official project for license.
+ *****************************************************************************/
+
+#import "VLCDonationNagScreenViewController.h"
+#import "UIApplication+VLCTopViewController.h"
+#import "VLCDonationViewController.h"
+#import "VLCDonationNavigationController.h"
+#import "VLC-Swift.h"
+
+@implementation VLCDonationNagScreenViewController
+
+- (void)viewDidLoad {
+    [super viewDidLoad];
+
+    ColorPalette *colors = PresentationTheme.current.colors;
+
+    self.buttonSeparatorView.backgroundColor = colors.orangeUI;
+
+#if !TARGET_OS_VISION
+    if (@available(iOS 26.0, *)) {
+        self.coloredBackgroundView.backgroundColor = UIColor.clearColor;
+
+        UICornerConfiguration *corners = [UICornerConfiguration configurationWithUniformRadius:[UICornerRadius fixedRadius:10.]];
+        self.coloredBackgroundView.cornerConfiguration = corners;
+
+        UIVisualEffectView *glassView = [[UIVisualEffectView alloc] initWithEffect:[[UIGlassEffect alloc] init]];
+        glassView.cornerConfiguration = corners;
+        glassView.translatesAutoresizingMaskIntoConstraints = NO;
+        [self.coloredBackgroundView insertSubview:glassView atIndex:0];
+        [NSLayoutConstraint activateConstraints:@[
+            [glassView.leadingAnchor constraintEqualToAnchor:self.coloredBackgroundView.leadingAnchor],
+            [glassView.trailingAnchor constraintEqualToAnchor:self.coloredBackgroundView.trailingAnchor],
+            [glassView.topAnchor constraintEqualToAnchor:self.coloredBackgroundView.topAnchor],
+            [glassView.bottomAnchor constraintEqualToAnchor:self.coloredBackgroundView.bottomAnchor]
+        ]];
+
+        self.titleLabel.textColor = UIColor.labelColor;
+        self.descriptionLabel.textColor = UIColor.secondaryLabelColor;
+    } else
+#endif
+    {
+        self.coloredBackgroundView.layer.backgroundColor = colors.background.CGColor;
+        self.coloredBackgroundView.layer.cornerRadius = 10.;
+        self.coloredBackgroundView.layer.borderWidth = 1.5;
+        self.coloredBackgroundView.layer.borderColor = colors.orangeDarkAccent.CGColor;
+        self.coloredBackgroundView.layer.shadowColor = colors.textfieldBorderColor.CGColor;
+        self.coloredBackgroundView.layer.shadowPath = [UIBezierPath bezierPathWithRoundedRect:self.coloredBackgroundView.bounds cornerRadius:10.].CGPath;
+        self.coloredBackgroundView.layer.shadowRadius = 8;
+        self.coloredBackgroundView.layer.shadowOffset = CGSizeMake(0.,0.);
+        self.coloredBackgroundView.layer.masksToBounds = NO;
+        self.coloredBackgroundView.layer.shadowOpacity = .25;
+
+        self.titleLabel.textColor = colors.cellTextColor;
+        self.descriptionLabel.textColor = colors.lightTextColor;
+    }
+
+    self.titleLabel.text = NSLocalizedString(@"DONATION_NAGSCREEN_TITLE", nil);
+    self.descriptionLabel.text = NSLocalizedString(@"DONATION_NAGSCREEN_SUBTITLE", nil);
+
+    NSDictionary *attributes = @{
+        NSFontAttributeName: [UIFont systemFontOfSize:18.],
+        NSForegroundColorAttributeName: colors.orangeUI
+    };
+    NSAttributedString *attributedString = [[NSAttributedString alloc] initWithString:NSLocalizedString(@"BUTTON_NOT_NOW", nil) attributes:attributes];
+    [self.notnowButton setAttributedTitle:attributedString forState:UIControlStateNormal];
+
+    attributes = @{
+        NSFontAttributeName: [UIFont boldSystemFontOfSize:18.],
+        NSForegroundColorAttributeName: colors.orangeUI
+    };
+    attributedString = [[NSAttributedString alloc] initWithString:NSLocalizedString(@"DONATION_DONATE_BUTTON", nil) attributes:attributes];
+    [self.donateButton setAttributedTitle:attributedString forState:UIControlStateNormal];
+
+    UITapGestureRecognizer *tapRecognizer = [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(dismiss:)];
+    [self.view addGestureRecognizer:tapRecognizer];
+}
+
+- (IBAction)dismiss:(id)sender
+{
+    [self dismissViewControllerAnimated:YES completion:nil];
+}
+
+- (IBAction)donate:(id)sender
+{
+    [self dismissViewControllerAnimated:YES completion:^{
+        UIViewController *donationVC = [[VLCDonationViewController alloc] initWithNibName:@"VLCDonationViewController" bundle:nil];
+        UINavigationController *donationNC = [[VLCDonationNavigationController alloc] initWithRootViewController:donationVC];
+#if TARGET_OS_IOS
+        if (UI_USER_INTERFACE_IDIOM() == UIUserInterfaceIdiomPad) {
+            donationNC.modalPresentationStyle = UIModalPresentationFormSheet;
+        } else {
+            donationNC.modalPresentationStyle = UIModalPresentationFullScreen;
+        }
+#else
+        donationNC.modalPresentationStyle = UIModalPresentationFullScreen;
+#endif
+        [[UIApplication sharedApplication].topViewController presentViewController:donationNC animated:YES completion:nil];
+    }];
+    [self dismissViewControllerAnimated:YES completion:nil];
+}
+
+@end

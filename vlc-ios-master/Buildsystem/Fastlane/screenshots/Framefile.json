@@ -1,0 +1,45 @@
+{
+  "default": {
+    "stack_title": true,
+    "frame": "BLACK",
+    "font_scale_factor" : 0.1,
+    "keyword": {
+      "fonts": [
+        {
+          "font": "./fonts/SF-Pro-Display-Bold.otf"
+        }
+      ]
+    },
+    "title": {
+      "fonts": [
+        {
+          "font": "./fonts/SF-Pro-Display-Regular.otf"
+        }
+      ],
+      "color": "#000000"
+    },
+    "background": "./background.png",
+    "padding": 50
+  },
+
+  "data": [
+    {
+      "filter": "playback",
+      "keyword": {
+        "color": "#000000"
+      }
+    },
+    {
+      "filter": "audio",
+      "keyword": {
+        "color": "#000000"
+      }
+    },
+    {
+      "filter": "video",
+      "keyword": {
+        "color": "#000000"
+      }
+    }
+  ]
+}

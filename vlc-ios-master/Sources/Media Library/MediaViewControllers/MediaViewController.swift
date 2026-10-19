@@ -1,0 +1,645 @@
+/*****************************************************************************
+ * MediaViewController.swift
+ * VLC for iOS
+ *****************************************************************************
+ * Copyright (c) 2018-2026 VideoLAN. All rights reserved.
+ * $Id$
+ *
+ * Authors: Carola Nitz <caro # videolan.org>
+ *          Felix Paul Kühne <fkuehne # videolan.org>
+ *
+ * Refer to the COPYING file of the official project for license.
+ *****************************************************************************/
+
+import UIKit
+import Foundation
+import UniformTypeIdentifiers
+
+class MediaViewController: VLCPagingViewController<VLCLabelCell> {
+
+    private let tabTitleMargin: CGFloat = 8.0
+    private var tabTitleFont: UIFont {
+        return UIFont.preferredCustomFont(forTextStyle: .headline).bolded
+    }
+
+    var mediaLibraryService: MediaLibraryService
+    #if os(iOS)
+    private lazy var rendererButton: UIButton = VLCAppCoordinator.sharedInstance().rendererDiscovererManager.setupRendererButton()
+    #endif
+    private lazy var regroupButton: UIBarButtonItem = {
+        var regroup = UIBarButtonItem(image: UIImage(named: "regroupMediaGroups"),
+                                     style: .plain, target: self,
+                                     action: #selector(handleRegroup))
+        regroup.tintColor = PresentationTheme.current.colors.orangeUI
+        regroup.accessibilityLabel = NSLocalizedString("BUTTON_REGROUP", comment: "")
+        regroup.accessibilityHint = NSLocalizedString("BUTTON_REGROUP_HINT", comment: "")
+        return regroup
+    }()
+
+    private lazy var selectAllButton: UIBarButtonItem = {
+        var selectAll = UIBarButtonItem(image: UIImage(named: "emptySelectAll"),
+                                        style: .plain, target: self,
+                                        action: #selector(handleSelectAll))
+        selectAll.accessibilityLabel = NSLocalizedString("BUTTON_SELECT_ALL", comment: "")
+        selectAll.accessibilityHint = NSLocalizedString("BUTTON_SELECT_ALL_HINT", comment: "")
+        return selectAll
+    }()
+
+    // MARK: UIMenu & UIActions
+
+    private lazy var menuButton: UIBarButtonItem = {
+        var buttonItem = UIBarButtonItem()
+        if #available(iOS 26.0, *) {
+            buttonItem.image = UIImage(systemName: "ellipsis")
+        } else {
+            buttonItem.image = UIImage(named: "EllipseCircle")
+        }
+        buttonItem.accessibilityLabel = NSLocalizedString("BUTTON_MENU", comment: "")
+        buttonItem.accessibilityHint = NSLocalizedString("BUTTON_MENU_HINT", comment: "")
+        buttonItem.accessibilityIdentifier = VLCAccessibilityIdentifier.mediaMenu
+        return buttonItem
+    }()
+
+    private lazy var doneButton: UIBarButtonItem = {
+        return UIBarButtonItem(barButtonSystemItem: .done, target: self, action: #selector(customSetEditing))
+    }()
+
+    private lazy var appMenuButton: UIBarButtonItem = {
+        return AppMenuBarButtonItem(presenter: self)
+    }()
+
+    private var rightBarButtons: [UIBarButtonItem]?
+    private var leftBarButtons: [UIBarButtonItem]?
+
+    init(mediaLibraryService: MediaLibraryService) {
+        self.mediaLibraryService = mediaLibraryService
+        super.init(nibName: nil, bundle: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(updateTheme), name: .VLCThemeDidChangeNotification, object: nil)
+    }
+
+    override func viewDidLoad() {
+        changeCurrentIndexProgressive = { (oldCell: VLCLabelCell?, newCell: VLCLabelCell?, progressPercentage: CGFloat, changeCurrentIndex: Bool, animated: Bool) in
+            guard changeCurrentIndex == true else { return }
+            oldCell?.iconLabel.textColor = PresentationTheme.current.colors.cellDetailTextColor
+            newCell?.iconLabel.textColor = PresentationTheme.current.colors.orangeUI
+        }
+        super.viewDidLoad()
+        rightBarButtons = [menuButton]
+
+#if os(iOS)
+        if !rendererButton.isHidden {
+            rightBarButtons?.append(UIBarButtonItem(customView: rendererButton))
+        }
+#endif
+
+        viewControllers.forEach {
+            ($0 as? MediaCategoryViewController)?.delegate = self
+        }
+        setupNavigationBar()
+    }
+
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        if menuButton.menu == nil,
+           let viewController = viewControllers[currentIndex] as? MediaCategoryViewController {
+            menuButton.menu = generateMenu(viewController: viewController)
+        }
+    }
+
+    private func setupNavigationBar() {
+        navigationController?.navigationBar.prefersLargeTitles = false
+        if #unavailable(iOS 26.0) {
+            navigationController?.navigationBar.standardAppearance = AppearanceManager.navigationbarAppearance()
+            navigationController?.navigationBar.scrollEdgeAppearance = AppearanceManager.navigationbarAppearance()
+            navigationController?.navigationBar.isTranslucent = false
+        }
+        #if os(iOS)
+        setNeedsStatusBarAppearanceUpdate()
+        #endif
+        updateButtonsFor(viewControllers[currentIndex])
+    }
+
+    @objc private func updateTheme() {
+        if containerView != nil {
+            containerView.backgroundColor = PresentationTheme.current.colors.background
+        }
+    }
+
+    func scrollToTop() {
+        guard let collectionView = (viewControllers[currentIndex] as? UICollectionViewController)?.collectionView else {
+            return
+        }
+        collectionView.setContentOffset(CGPoint(x: 0, y: -collectionView.adjustedContentInset.top), animated: true)
+    }
+
+    // MARK: - PagerTabStripDataSource
+
+    override func viewControllers(for pagerTabStripController: PagerTabStripViewController) -> [UIViewController] {
+        fatalError("this should only be used as subclass")
+    }
+
+    func updateButtonsFor(_ viewController: UIViewController) {
+        var showButtons = false
+        if let mediaCategoryViewController = viewController as? MediaCategoryViewController {
+            showButtons = mediaCategoryViewController.isEmptyCollectionView() ? false : true
+        }
+
+        if let viewController = viewController as? MediaCategoryViewController {
+            menuButton.menu = view.window != nil ? generateMenu(viewController: viewController) : nil
+        }
+        leftBarButtons = isEditing ? [selectAllButton] : nil
+        rightBarButtons = isEditing ? [doneButton] : rightBarButtonItems()
+
+        var mediaCategoryViewController: UIViewController = self
+        if navigationController?.viewControllers.last is ArtistViewController {
+            showButtons = true
+            mediaCategoryViewController = self
+        } else if viewController is CollectionCategoryViewController {
+            mediaCategoryViewController = viewController
+        }
+
+        if navigationController?.viewControllers.last is ArtistViewController,
+           let viewController = viewControllers[currentIndex] as? CollectionCategoryViewController {
+            let playButton = viewController.getPlayAllButton()
+            rightBarButtons?.append(playButton)
+        }
+
+        var emptyStateRightBarButtons: [UIBarButtonItem] = []
+        if navigationController?.viewControllers.last is PlaylistViewController,
+           let viewController = viewControllers[currentIndex] as? PlaylistCategoryViewController,
+           !isEditing {
+            let createPlaylistButton = viewController.getCreatePlaylistButton()
+            rightBarButtons?.append(createPlaylistButton)
+            emptyStateRightBarButtons = [createPlaylistButton]
+        }
+
+        if !isEditing, offersExternalFolders(on: viewController) {
+            emptyStateRightBarButtons.insert(menuButton, at: 0)
+        }
+
+        if !isEditing, navigationController?.viewControllers.count == 1 {
+            var items: [UIBarButtonItem] = [appMenuButton]
+            if showButtons, let leftBarButtons = leftBarButtons {
+                items.append(contentsOf: leftBarButtons)
+            }
+            mediaCategoryViewController.navigationItem.leftBarButtonItems = items
+        } else {
+            mediaCategoryViewController.navigationItem.leftBarButtonItems = showButtons ? leftBarButtons : nil
+        }
+        mediaCategoryViewController.navigationItem.rightBarButtonItems = showButtons ? rightBarButtons : emptyStateRightBarButtons
+
+        if #available(iOS 26.0, visionOS 26.0, *), let page = viewController as? MediaCategoryViewController {
+            let showSearch = (showButtons || page.isSearchActive) && !isEditing
+            mediaCategoryViewController.navigationItem.preferredSearchBarPlacement = .integrated
+            mediaCategoryViewController.navigationItem.searchController = showSearch ? page.searchController : nil
+        }
+    }
+
+    private func rightBarButtonItems() -> [UIBarButtonItem] {
+        var rightBarButtonItems: [UIBarButtonItem] = [menuButton]
+
+#if os(iOS)
+        if !rendererButton.isHidden {
+            rightBarButtonItems.append(UIBarButtonItem(customView: rendererButton))
+        }
+#endif
+
+        return rightBarButtonItems
+    }
+
+    private func offersExternalFolders(on viewController: UIViewController) -> Bool {
+        return (self is VideoViewController || self is AudioViewController) && viewControllers.contains(viewController)
+    }
+
+    override func configure(cell: VLCLabelCell, for indicatorInfo: IndicatorInfo) {
+        cell.iconLabel.adjustsFontSizeToFitWidth = true
+        cell.iconLabel.text = indicatorInfo.title
+        cell.iconLabel.font = tabTitleFont
+        cell.iconLabel.accessibilityIdentifier = indicatorInfo.accessibilityIdentifier
+    }
+
+    override func minimumCellWidth(for indicatorInfo: IndicatorInfo?) -> CGFloat {
+        let defaultWidth: CGFloat = super.minimumCellWidth(for: indicatorInfo)
+
+        guard let title = indicatorInfo?.title else {
+            return defaultWidth
+        }
+
+        let titleWidth = (title as NSString).size(withAttributes: [.font: tabTitleFont]).width
+        return max(defaultWidth, ceil(titleWidth) + 2 * tabTitleMargin)
+    }
+
+    override func updateIndicator(for viewController: PagerTabStripViewController, fromIndex: Int, toIndex: Int, withProgressPercentage progressPercentage: CGFloat, indexWasChanged: Bool) {
+        if indexWasChanged {
+            updateButtonsFor(viewControllers[toIndex])
+        }
+        super.updateIndicator(for: viewController, fromIndex: fromIndex, toIndex: toIndex, withProgressPercentage: progressPercentage, indexWasChanged: indexWasChanged)
+    }
+
+    override var preferredStatusBarStyle: UIStatusBarStyle {
+        return PresentationTheme.current.colors.statusBarStyle
+    }
+}
+
+// MARK: - MediaCatgoryViewControllerDelegate
+
+extension MediaViewController: MediaCategoryViewControllerDelegate {
+    func generateMenu(for viewController: MediaCategoryViewController) -> UIMenu {
+        return generateMenu(viewController: viewController)
+    }
+
+    func needsToUpdateNavigationbarIfNeeded(_ viewController: MediaCategoryViewController) {
+        if viewController == viewControllers[currentIndex] {
+            updateButtonsFor(viewController)
+        } else if viewController is CollectionCategoryViewController {
+            updateButtonsFor(viewController)
+        }
+    }
+
+    func enableCategorySwitching(for viewController: MediaCategoryViewController, enable: Bool) {
+        scrollingEnabled(enable)
+    }
+
+    func setEditingStateChanged(for viewController: MediaCategoryViewController, editing: Bool) {
+        customSetEditing()
+    }
+
+    func updateNavigationBarButtons(for viewController: MediaCategoryViewController, isEditing: Bool) {
+        leftBarButtons = isEditing ? [selectAllButton] : nil
+        rightBarButtons = isEditing ? [doneButton] : [menuButton]
+
+#if os(iOS)
+        if !rendererButton.isHidden {
+            rightBarButtons?.append(UIBarButtonItem(customView: rendererButton))
+        }
+#endif
+
+        if navigationController?.viewControllers.last is PlaylistViewController,
+           let playlistCategoryViewController = viewControllers[currentIndex] as? PlaylistCategoryViewController,
+           !isEditing {
+            rightBarButtons?.append(playlistCategoryViewController.getCreatePlaylistButton())
+        }
+
+        viewController.navigationItem.rightBarButtonItems = rightBarButtons
+        viewController.navigationItem.leftBarButtonItems = leftBarButtons
+
+        setEditing(isEditing, animated: true)
+    }
+
+    func updateSelectAllButton(for viewController: MediaCategoryViewController) {
+        selectAllButton.image = viewController.isAllSelected ? UIImage(named: "allSelected") : UIImage(named: "emptySelectAll")
+    }
+}
+
+// MARK: - Edit
+
+extension MediaViewController {
+    @objc private func customSetEditing() {
+        isEditing = !isEditing
+        var rightButtons: [UIBarButtonItem] = [menuButton]
+
+        if let mediaCategoryViewController = viewControllers[currentIndex] as? MediaCategoryViewController,
+            mediaCategoryViewController.model is MediaGroupViewModel {
+            leftBarButtons = isEditing ? [regroupButton, selectAllButton] : nil
+        } else {
+            leftBarButtons = isEditing ? [selectAllButton] : nil
+        }
+
+#if os(iOS)
+        if !rendererButton.isHidden {
+            rightButtons.append(UIBarButtonItem(customView: rendererButton))
+        }
+#endif
+
+        // Check if the playAllButton should be displayed
+        if navigationController?.viewControllers.last is ArtistViewController,
+           let viewController = viewControllers[currentIndex] as? CollectionCategoryViewController {
+            let playAllButton = viewController.getPlayAllButton()
+            rightButtons.append(playAllButton)
+        }
+
+        if navigationController?.viewControllers.last is PlaylistViewController,
+           let viewController = viewControllers[currentIndex] as? PlaylistCategoryViewController {
+            rightButtons.append(viewController.getCreatePlaylistButton())
+        }
+
+        rightBarButtons = isEditing ? [doneButton] : rightButtons
+        navigationItem.rightBarButtonItems = rightBarButtons
+        navigationItem.leftBarButtonItems = leftBarButtons
+
+        if !isEditing, navigationController?.viewControllers.count == 1 {
+            var items: [UIBarButtonItem] = [appMenuButton]
+            if let leftBarButtons = leftBarButtons {
+                items.append(contentsOf: leftBarButtons)
+            }
+            navigationItem.leftBarButtonItems = items
+        }
+
+        if #available(iOS 26.0, visionOS 26.0, *),
+           let page = viewControllers[currentIndex] as? MediaCategoryViewController,
+           navigationController?.viewControllers.count == 1 {
+            let showSearch = page.isSearchActive || !isEditing
+            navigationItem.preferredSearchBarPlacement = .integrated
+            navigationItem.searchController = showSearch ? page.searchController : nil
+        }
+
+        if isEditing == false {
+            selectAllButton.image = UIImage(named: "emptySelectAll")
+        }
+    }
+
+    override func setEditing(_ editing: Bool, animated: Bool) {
+        super.setEditing(editing, animated: animated)
+
+        scrollingEnabled(!editing)
+
+        if let controllers = navigationController?.viewControllers,
+           controllers.count > 1, controllers.last is CollectionCategoryViewController {
+            controllers.last?.setEditing(editing, animated: animated)
+        } else {
+            viewControllers[currentIndex].setEditing(editing, animated: animated)
+        }
+    }
+}
+
+// MARK: - Sort
+
+extension MediaViewController {
+    @objc func handleRegroup() {
+        if let mediaCategoryViewController = viewControllers[currentIndex] as? MediaCategoryViewController {
+            guard mediaCategoryViewController.model is MediaGroupViewModel else {
+                assertionFailure("MediaViewController: handleRegroup: Mismatching model can't regroup.")
+                return
+            }
+            mediaCategoryViewController.handleRegroup()
+        }
+    }
+    
+    @objc func handleHistory() {
+        let mediaType: VLCMLMediaType = viewControllers[currentIndex] is MovieCategoryViewController ? .video : .audio
+        let historyView = HistoryCategoryViewController(mediaLibraryService, mediaType: mediaType)
+        navigationController?.pushViewController(historyView, animated: true)
+    }
+
+    @objc func handleFolders() {
+        if let mediaCategoryViewController = viewControllers[currentIndex] as? MediaCategoryViewController {
+            let isFolder = UserDefaults.standard.bool(forKey: KVLCFolderViewLayout)
+            mediaCategoryViewController.handleLayoutChange(gridLayout: true, isFolder: !isFolder)
+            UserDefaults.standard.set(!isFolder, forKey: KVLCFolderViewLayout)
+            menuButton.menu = generateMenu(viewController: mediaCategoryViewController)
+        }
+    }
+
+    func handleAddExternalFolder() {
+        let documentPicker = UIDocumentPickerViewController(forOpeningContentTypes: [.folder])
+        documentPicker.delegate = self
+        present(documentPicker, animated: true)
+    }
+
+    @objc func handleSelectAll() {
+        let controller: MediaCategoryViewController
+        if let mediaCategoryViewController = navigationController?.viewControllers.last as? CollectionCategoryViewController {
+            controller = mediaCategoryViewController
+        } else if let mediaCategoryViewController = viewControllers[currentIndex] as? MediaCategoryViewController {
+            controller = mediaCategoryViewController
+        } else {
+            preconditionFailure("MediaViewController: Invalid view controller.")
+        }
+
+        controller.handleSelectAll()
+        selectAllButton.image = controller.isAllSelected ? UIImage(named: "allSelected") : UIImage(named: "emptySelectAll")
+    }
+}
+
+// MARK: - UIMenu
+
+extension MediaViewController {
+    func generateLayoutMenu(with mediaCategoryViewController: MediaCategoryViewController) -> UIMenu {
+        let isGridLayout: Bool = mediaCategoryViewController.model.cellType == MovieCollectionViewCell.self
+        || mediaCategoryViewController.model.cellType == MediaGridCollectionCell.self
+
+        var isFolder: Bool = false
+        if mediaCategoryViewController.model is FolderModel {
+            isFolder = true
+        } else if mediaCategoryViewController.model is MediaGroupViewModel &&
+                    UserDefaults.standard.bool(forKey: KVLCFolderViewLayout) {
+            isFolder = true
+        }
+
+        let gridAction = UIAction(title: NSLocalizedString("GRID_LAYOUT", comment: ""),
+                                  image: UIImage(systemName: "square.grid.2x2"),
+                                  state: isGridLayout ? .on : .off,
+                                  handler: {
+            [unowned self, weak mediaCategoryViewController] _ in
+            guard let mediaCategoryViewController = mediaCategoryViewController else { return }
+            mediaCategoryViewController.handleLayoutChange(gridLayout: true, isFolder: isFolder)
+            menuButton.menu = generateMenu(viewController: mediaCategoryViewController)
+        })
+
+        let listAction = UIAction(title: NSLocalizedString("LIST_LAYOUT", comment: ""),
+                                  image: UIImage(systemName: "list.bullet"),
+                                  state: isGridLayout ? .off : .on,
+                                  handler: {
+            [unowned self, weak mediaCategoryViewController] _ in
+            guard let mediaCategoryViewController = mediaCategoryViewController else { return }
+            mediaCategoryViewController.handleLayoutChange(gridLayout: false, isFolder: isFolder)
+            menuButton.menu = generateMenu(viewController: mediaCategoryViewController)
+        })
+
+        return UIMenu(title: NSLocalizedString("DISPLAY_AS", comment: ""), options: .displayInline,
+                      children: [gridAction, listAction])
+    }
+
+    func generateSortMenu(with mediaCategoryViewController: MediaCategoryViewController) -> UIMenu {
+        let sortModel = mediaCategoryViewController.model.sortModel
+        var sortActions: [UIMenuElement] = []
+
+        var currentSortIndex: Int = 0
+        for (index, criterion) in
+                sortModel.sortingCriteria.enumerated()
+        where criterion == sortModel.currentSort {
+            currentSortIndex = index
+            break
+        }
+
+        for (index, criterion) in sortModel.sortingCriteria.enumerated() {
+            let currentSort: Bool = index == currentSortIndex
+            let chevronImageName: String = sortModel.desc ? "chevron.down" : "chevron.up"
+            var actionImage: UIImage? = currentSort ? UIImage(systemName: chevronImageName) : nil
+
+            // There is no need to display the desc image since it has no impact
+            if criterion == VLCMLSortingCriteria.default {
+                actionImage = nil
+            }
+
+            let action = UIAction(title: String(describing: criterion),
+                                  image: actionImage,
+                                  state: currentSort ? .on : .off,
+                                  handler: {
+                [unowned self, weak mediaCategoryViewController] _ in
+                guard let mediaCategoryViewController = mediaCategoryViewController else { return }
+                mediaCategoryViewController.executeSortAction(with: criterion,
+                                                             desc: !sortModel.desc)
+                menuButton.menu = generateMenu(viewController: mediaCategoryViewController)
+            })
+            sortActions.append(action)
+        }
+
+        return UIMenu(title: NSLocalizedString("SORT_BY", comment: ""),
+                      image: UIImage(named: "sort"),
+                      options: .singleSelection,
+                      children: sortActions)
+    }
+
+    func generateSelectAction() -> UIAction {
+        let selectAction = UIAction(title: NSLocalizedString("BUTTON_SELECT", comment: ""),
+                                    image: UIImage(systemName: "checkmark.circle"),
+                                    handler: {
+            [unowned self] _ in
+            customSetEditing()
+        })
+        selectAction.accessibilityLabel = NSLocalizedString("BUTTON_SELECT", comment: "")
+        selectAction.accessibilityHint = NSLocalizedString("BUTTON_SELECT_HINT", comment: "")
+        selectAction.accessibilityIdentifier = VLCAccessibilityIdentifier.select
+        return selectAction
+    }
+
+    func generateHistoryMenu() -> UIMenu {
+        let historyAction = UIAction(title: NSLocalizedString("BUTTON_HISTORY", comment: ""),
+                                     image: UIImage(systemName: "clock.arrow.2.circlepath")) { [weak self] _ in
+            self?.handleHistory()
+        }
+
+        historyAction.accessibilityLabel = NSLocalizedString("BUTTON_HISTORY", comment: "")
+        historyAction.accessibilityHint = NSLocalizedString("BUTTON_HISTORY_HINT", comment: "")
+
+        return UIMenu(options: .displayInline, children: [historyAction])
+    }
+
+    func generateFolderMenu() -> UIMenu {
+        let isFolderLayout = UserDefaults.standard.bool(forKey: KVLCFolderViewLayout)
+        let folderAction = UIAction(
+            title: NSLocalizedString("FOLDERS", comment: ""),
+            image: UIImage(systemName: "folder"),
+            state: isFolderLayout ? .on : .off
+        ) { _ in
+            self.handleFolders()
+        }
+
+        folderAction.accessibilityLabel = NSLocalizedString("FOLDERS", comment: "")
+        folderAction.accessibilityHint = NSLocalizedString("BUTTON_FOLDER_HINT", comment: "")
+
+        return UIMenu(options: .displayInline, children: [folderAction])
+    }
+
+    func generateAddExternalFolderMenu() -> UIMenu {
+        let addExternalFolderAction = UIAction(title: NSLocalizedString("ADD_EXTERNAL_FOLDER", comment: ""),
+                                               image: UIImage(systemName: "folder.badge.plus")) { [weak self] _ in
+            self?.handleAddExternalFolder()
+        }
+
+        return UIMenu(options: .displayInline, children: [addExternalFolderAction])
+    }
+
+    func generateMenu(viewController: MediaCategoryViewController?) -> UIMenu {
+        guard let mediaCategoryViewController = viewController else {
+            preconditionFailure("MediaViewControllers: invalid viewController")
+        }
+
+        let selectAction = generateSelectAction()
+
+        var rightMenuItems: [UIMenuElement] = [selectAction]
+
+        if offersExternalFolders(on: mediaCategoryViewController) {
+            let addExternalFolderMenu = generateAddExternalFolderMenu()
+            if mediaCategoryViewController.isEmptyCollectionView() {
+                return addExternalFolderMenu
+            }
+            rightMenuItems.append(addExternalFolderMenu)
+        }
+
+        if let parentViewController = viewController?.parent,
+           parentViewController is VideoViewController || parentViewController is AudioViewController {
+            let historyMenu = generateHistoryMenu()
+            rightMenuItems.append(historyMenu)
+        }
+
+        if let parentViewController = viewController?.parent,
+           parentViewController is VideoViewController {
+            let folderMenu = generateFolderMenu()
+            rightMenuItems.append(folderMenu)
+        }
+
+        let layoutSubMenu = generateLayoutMenu(with: mediaCategoryViewController)
+        let sortSubMenu = generateSortMenu(with: mediaCategoryViewController)
+
+        if let model = mediaCategoryViewController.model as? CollectionModel,
+           model.mediaCollection is VLCMLPlaylist {
+            rightMenuItems.append(sortSubMenu)
+            return UIMenu(options: .displayInline, children: rightMenuItems)
+        }
+
+        rightMenuItems.append(layoutSubMenu)
+        rightMenuItems.append(sortSubMenu)
+
+        var additionalMenuItems: [UIAction] = []
+
+        if mediaCategoryViewController.model is ArtistModel {
+            let isIncludeAllArtistActive = UserDefaults.standard.bool(forKey: kVLCAudioLibraryHideFeatArtists)
+            let includeAllArtist = UIAction(title: NSLocalizedString("HIDE_FEAT_ARTISTS", comment: ""),
+                                            image: UIImage(systemName: "person.3"),
+                                            state: isIncludeAllArtistActive ? .on : .off,
+                                            handler: { [weak mediaCategoryViewController] _ in
+                mediaCategoryViewController?.actionSheetSortSectionHeaderShouldHideFeatArtists(onSwitchIsOnChange: !isIncludeAllArtistActive)
+            })
+
+            additionalMenuItems.append(includeAllArtist)
+        } else if let model = mediaCategoryViewController.model as? CollectionModel,
+                  let mediaCollection = model.mediaCollection as? VLCMLAlbum,
+                  !mediaCollection.isUnknownAlbum() {
+            let hideTrackNumbers = UserDefaults.standard.bool(forKey: kVLCAudioLibraryHideTrackNumbers)
+            let hideTrackNumbersAction = UIAction(title: NSLocalizedString("HIDE_TRACK_NUMBERS", comment: ""),
+                                                     state: hideTrackNumbers ? .on : .off,
+                                                     handler: { [weak mediaCategoryViewController] _ in
+                mediaCategoryViewController?.actionSheetSortSectionHeaderShouldHideTrackNumbers(onSwitchIsOnChange: !hideTrackNumbers)
+            })
+
+            additionalMenuItems.append(hideTrackNumbersAction)
+        }
+
+        if !additionalMenuItems.isEmpty {
+            let additionalMenu: UIMenu = UIMenu(title: NSLocalizedString("ADDITIONAL_OPTIONS", comment: ""),
+                                                options: .displayInline,
+                                                children: additionalMenuItems)
+            rightMenuItems.append(additionalMenu)
+        }
+
+        return UIMenu(options: .displayInline, children: rightMenuItems)
+    }
+}
+
+// MARK: - UIDocumentPickerDelegate
+
+extension MediaViewController: UIDocumentPickerDelegate {
+    func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) {
+        guard let url = urls.first else {
+            return
+        }
+
+        let errorMessage: String
+        switch mediaLibraryService.medialib.addExternalFolder(at: url) {
+        case .added, .updated:
+            return
+        case .overlapping:
+            errorMessage = NSLocalizedString("EXTERNAL_FOLDER_OVERLAPPING", comment: "")
+        case .failed:
+            errorMessage = NSLocalizedString("EXTERNAL_FOLDER_FAILED", comment: "")
+        @unknown default:
+            return
+        }
+
+        VLCAlertViewController.alertViewManager(title: NSLocalizedString("EXTERNAL_FOLDER_NOT_ADDED", comment: ""),
+                                                errorMessage: errorMessage,
+                                                viewController: self)
+    }
+}

@@ -1,0 +1,28 @@
+/*****************************************************************************
+ * VLC for iOS
+ *****************************************************************************
+ * Copyright (c) 2015 VideoLAN. All rights reserved.
+ * $Id$
+ *
+ * Authors: Tobias Conradi <videolan # tobias-conradi.de>
+ *
+ * Refer to the COPYING file of the official project for license.
+ *****************************************************************************/
+
+#import <UIKit/UIKit.h>
+@class MediaLibraryService;
+
+@interface VLCNetworkImageView : UIImageView
+@property (nonatomic) NSURLSessionDataTask *downloadTask;
+- (void)setImageWithURL:(NSURL *)url;
+- (void)setImageWithURL:(NSURL *)url maxPixelSize:(CGFloat)maxPixelSize;
+- (void)cancelLoading;
+#if TARGET_OS_TV
+- (void)requestCachedThumbnail:(VLCMLMedia *)media;
+#endif
+@property (nonatomic, readwrite) BOOL animateImageSetting;
+@property (readonly) MediaLibraryService *mediaLibraryService;
+// if set the image view replaces the constraint on image uodates with a
+// constraint that has the same aspect ratio as the image
+@property (nonatomic) IBOutlet NSLayoutConstraint *aspectRatioConstraint;
+@end

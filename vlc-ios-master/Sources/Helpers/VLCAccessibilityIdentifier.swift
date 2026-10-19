@@ -1,0 +1,53 @@
+/*****************************************************************************
+ * VLCAccessibilityIdentifier.swift
+ *
+ * Copyright © 2018 VLC authors and VideoLAN
+ * Copyright © 2018 Videolabs
+ *
+ * Authors: Soomin Lee <bubu@mikan.io>
+ *
+ * Refer to the COPYING file of the official project for license.
+ *****************************************************************************/
+
+import Foundation
+
+@objc class VLCAccessibilityIdentifier: NSObject {
+    static let video = "video"
+    static let audio = "audio"
+    static let songs = "songs"
+    static let artists = "artists"
+    static let albums = "albums"
+    static let genres = "genres"
+    static let mediaCell = "mediaCell"
+    static let mediaMenu = "mediaMenu"
+    static let select = "select"
+    @objc static let localNetwork = "localNetwork"
+    @objc static let onAir = "onAir"
+    @objc static let onAirRadio = "onAirRadio"
+    @objc static let onAirPodcasts = "onAirPodcasts"
+    @objc static let railItem = "railItem"
+    @objc static let radioCountry = "radioCountry"
+    @objc static let radioAllCountries = "radioAllCountries"
+    static let playlist = "playlist"
+    static let podcasts = "podcasts"
+    static let podcastAdd = "podcastAdd"
+    static let podcastDirectory = "podcastDirectory"
+    static let podcastEpisode = "podcastEpisode"
+    static let podcastLanguage = "podcastLanguage"
+    @objc static let settings = "settings"
+    static let openSettings = "openSettings"
+    @objc static let addServer = "addServer"
+    @objc static let local = "local"
+    @objc static let photos = "photos"
+    @objc static let cloud = "cloud"
+    @objc static let stream = "stream"
+    @objc static let downloads = "downloads"
+    @objc static let favorite = "favorite"
+    @objc static let done = "done"
+    static let contact = "contact"
+    @objc static let about = "about"
+    @objc static let playPause = "playPause"
+    static let videoPlayerScrubBar = "videoPlayerScrubBar"
+    static let moreOptions = "moreOptions"
+    static let closePlayback = "closePlayback"
+}

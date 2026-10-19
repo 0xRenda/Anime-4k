@@ -1,0 +1,139 @@
+/*****************************************************************************
+ * AudioViewController.swift
+ * VLC for iOS
+ *****************************************************************************
+ * Copyright (c) 2018 VideoLAN. All rights reserved.
+ * $Id$
+ *
+ * Authors: Carola Nitz <caro # videolan.org>
+ *
+ * Refer to the COPYING file of the official project for license.
+ *****************************************************************************/
+
+class AudioViewController: MediaViewController {
+    override init(mediaLibraryService: MediaLibraryService) {
+        super.init(mediaLibraryService: mediaLibraryService)
+        setupUI()
+    }
+
+    override func viewWillAppear(_ animated: Bool) {
+        currentIndex = UserDefaults.standard.integer(forKey: kVLCAudioTabIndex)
+        super.viewWillAppear(animated)
+    }
+
+    private func setupUI() {
+        title = NSLocalizedString("AUDIO", comment: "")
+        tabBarItem = UITabBarItem(
+            title: NSLocalizedString("AUDIO", comment: ""),
+            image: UIImage(named: "Audio"),
+            selectedImage: UIImage(named: "Audio"))
+        tabBarItem.accessibilityIdentifier = VLCAccessibilityIdentifier.audio
+    }
+
+    override func viewControllers(for pagerTabStripController: PagerTabStripViewController) -> [UIViewController] {
+        return [
+            ArtistCategoryViewController(mediaLibraryService),
+            AlbumCategoryViewController(mediaLibraryService),
+            TrackCategoryViewController(mediaLibraryService),
+            GenreCategoryViewController(mediaLibraryService),
+            FolderViewController(
+                mediaLibraryService,
+                isAudio: true,
+                folder: mediaLibraryService.baseFolder()
+            ),
+
+        ]
+    }
+
+    func resetTitleView() {
+        navigationItem.titleView = nil
+    }
+}
+
+class ArtistsViewController: MediaViewController {
+    override init(mediaLibraryService: MediaLibraryService) {
+        super.init(mediaLibraryService: mediaLibraryService)
+        setupUI()
+    }
+
+    private func setupUI() {
+        let localizedTitle: String = NSLocalizedString("ARTISTS", comment: "")
+        title = localizedTitle
+
+        let color: UIColor = PresentationTheme.current.colors.tabBarIconColor
+        let image: UIImage? = UIImage(named: "artists")?.withTintColor(color)
+
+        tabBarItem = UITabBarItem(title: localizedTitle, image: image, selectedImage: image)
+        tabBarItem.accessibilityIdentifier = VLCAccessibilityIdentifier.artists
+    }
+
+    override func viewControllers(for pagerTabStripController: PagerTabStripViewController) -> [UIViewController] {
+        return [ArtistCategoryViewController(mediaLibraryService)]
+    }
+}
+
+class AlbumsViewController: MediaViewController {
+    override init(mediaLibraryService: MediaLibraryService) {
+        super.init(mediaLibraryService: mediaLibraryService)
+        setupUI()
+    }
+
+    private func setupUI() {
+        let localizedTitle: String = NSLocalizedString("ALBUMS", comment: "")
+        title = localizedTitle
+
+        let color: UIColor = PresentationTheme.current.colors.tabBarIconColor
+        let image: UIImage? = UIImage(named: "albums")?.withTintColor(color)
+
+        tabBarItem = UITabBarItem(title: localizedTitle, image: image, selectedImage: image)
+        tabBarItem.accessibilityIdentifier = VLCAccessibilityIdentifier.albums
+    }
+
+    override func viewControllers(for pagerTabStripController: PagerTabStripViewController) -> [UIViewController] {
+        return [AlbumCategoryViewController(mediaLibraryService)]
+    }
+}
+
+class TracksViewController: MediaViewController {
+    override init(mediaLibraryService: MediaLibraryService) {
+        super.init(mediaLibraryService: mediaLibraryService)
+        setupUI()
+    }
+
+    private func setupUI() {
+        let localizedTitle: String = NSLocalizedString("SONGS", comment: "")
+        title = localizedTitle
+
+        let color: UIColor = PresentationTheme.current.colors.tabBarIconColor
+        let image: UIImage? = UIImage(named: "songs")?.withTintColor(color)
+
+        tabBarItem = UITabBarItem(title: localizedTitle, image: image, selectedImage: image)
+        tabBarItem.accessibilityIdentifier = VLCAccessibilityIdentifier.songs
+    }
+
+    override func viewControllers(for pagerTabStripController: PagerTabStripViewController) -> [UIViewController] {
+        return [TrackCategoryViewController(mediaLibraryService)]
+    }
+}
+
+class GenresViewController: MediaViewController {
+    override init(mediaLibraryService: MediaLibraryService) {
+        super.init(mediaLibraryService: mediaLibraryService)
+        setupUI()
+    }
+
+    private func setupUI() {
+        let localizedTitle: String = NSLocalizedString("GENRES", comment: "")
+        title = localizedTitle
+
+        let color: UIColor = PresentationTheme.current.colors.tabBarIconColor
+        let image: UIImage? = UIImage(named: "genres")?.withTintColor(color)
+
+        tabBarItem = UITabBarItem(title: localizedTitle, image: image, selectedImage: image)
+        tabBarItem.accessibilityIdentifier = VLCAccessibilityIdentifier.genres
+    }
+
+    override func viewControllers(for pagerTabStripController: PagerTabStripViewController) -> [UIViewController] {
+        return [GenreCategoryViewController(mediaLibraryService)]
+    }
+}
