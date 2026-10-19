@@ -115,7 +115,7 @@ playback defaults existed. The hosted scheme now explicitly requests real app
 startup through `ROXY_PLAYBACK_TESTS=1`, and setup fails immediately if the
 delegate is absent. Logic tests retain their original startup behavior.
 Simulator compilation now precedes boot to reduce competing memory use on the
-runner, with separate build and runtime logs. The corrected test run is pending.
+runner, with separate build and runtime logs. The corrected run's results follow below.
 
 The corrected hosted run (39332415038) passed nine of ten tests, including real
 MKV decoding, rapid replacement, completion ownership, decoder-error recovery,
@@ -124,4 +124,27 @@ library symptom: decoding continued but fullscreen presentation was dropped
 while a previous player was dismissing. Presentation now waits for that UIKit
 transition and cancels stale requests on stop/close. A further regression test
 explicitly opens a second video during the first player's dismissal animation.
-The updated eleven-test run is pending; no IPA was published from a failed run.
+The eleven-test run's result follows below. Failed runs did not publish an IPA.
+
+## Successful 4.0.1 media-opening regression build
+
+[Actions run 39335168812](https://github.com/0xRenda/Anime-4k/actions/runs/39335168812)
+completed successfully for commit `d4ae79db95f22173c3cb2d9d64cfbbec20f232c6`:
+
+- All 17 Python source checks passed.
+- All 49 Metal shaders compiled for macOS and iPhoneOS; the small-CNN CPU/Metal
+  comparison passed with maximum absolute error 0.0009765625.
+- The iPhone/iPad app archived and passed IPA packaging validation.
+- All **11 hosted iOS playback tests passed with zero failures**, including
+  shared MKV decoding and visible player presentation, extensionless picker
+  files, folder order, file-access ownership, repeated filenames, rapid
+  replacements, recovery from decoder failure, Anime4K frame delivery, and
+  opening a second video during the previous player's dismissal animation.
+- Version **4.0.1**, build **1008**, was uploaded as
+  [Roxy-Player-automatic-unsigned](https://github.com/0xRenda/Anime-4k/actions/runs/39335168812/artifacts/12227240821).
+  The artifact contains all quality presets and is retained for 14 days.
+
+The new IPA was left on GitHub for the user to download. Hosted tests validate
+the app's file-opening and playback paths, but do not replace physical iPhone/
+iPad share-sheet, external file-provider, signing, or sustained performance
+testing. Those checks remain in the device checklist.

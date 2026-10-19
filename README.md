@@ -4,8 +4,9 @@ An iPhone and iPad player based on the supplied VLC iOS source, with a Metal
 port of the supplied Anime4K shader library.
 
 **Status:** GitHub Actions has successfully archived the iOS app, compiled all
-49 Metal shaders, and checked the small CNN against its CPU reference. IPA
-uploads now require hosted iOS playback tests to pass. Physical-device,
+49 Metal shaders, checked the small CNN against its CPU reference, and passed
+all **11 hosted iOS playback tests** for 4.0.1. IPA uploads require those tests
+to pass. Physical-device,
 file-provider and performance testing remains pending; see
 [validation results](docs/VALIDATION.md) and the [device checklist](docs/DEVICE_TESTING.md).
 
