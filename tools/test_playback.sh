@@ -22,13 +22,17 @@ for runtime in sorted(devices, reverse=True):
 raise SystemExit('No available iPhone simulator runtime')
 PY
 )"
+TEST_ARGS=(-workspace vlc-ios-master/VLC.xcworkspace -scheme Roxy-PlaybackTests
+  -configuration Release -destination "id=$SIMULATOR_ID"
+  -derivedDataPath "$ROOT/.build/SimulatorTests"
+  -clonedSourcePackagesDirPath "$ROOT/.build/SourcePackages" -onlyUsePackageVersionsFromResolvedFile
+  -parallel-testing-enabled NO ARCHS=arm64 ONLY_ACTIVE_ARCH=YES
+  CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY='')
+# Compile before booting iOS so the simulator does not compete with the Swift
+# compiler for the hosted runner's memory. Keep build and runtime logs separate.
+xcodebuild build-for-testing "${TEST_ARGS[@]}" 2>&1 | tee "build/playback-build-$ROXY_QUALITY.log"
 xcrun simctl boot "$SIMULATOR_ID" 2>/dev/null || true
 xcrun simctl bootstatus "$SIMULATOR_ID" -b
-xcodebuild test -workspace vlc-ios-master/VLC.xcworkspace -scheme Roxy-PlaybackTests \
-  -configuration Release -destination "id=$SIMULATOR_ID" \
-  -derivedDataPath "$ROOT/.build/SimulatorTests" \
-  -clonedSourcePackagesDirPath "$ROOT/.build/SourcePackages" -onlyUsePackageVersionsFromResolvedFile \
+xcodebuild test-without-building "${TEST_ARGS[@]}" \
   -resultBundlePath "$ROOT/build/playback-tests-$ROXY_QUALITY.xcresult" \
-  -parallel-testing-enabled NO ARCHS=arm64 ONLY_ACTIVE_ARCH=YES \
-  CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY='' \
   2>&1 | tee "build/playback-tests-$ROXY_QUALITY.log"

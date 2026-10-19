@@ -82,7 +82,20 @@ Releases. Downloaded artifacts remain private to the repository's access rules.
 
 Successful jobs upload `Roxy-Player-QUALITY-unsigned.ipa` or
 `Roxy-Player-QUALITY-signed.ipa`. Build logs are uploaded separately, including
-on failure. A failed archive does not produce a placeholder IPA.
+on failure. IPA upload is gated on the hosted iOS playback tests, including real
+MKV/MP4 decoding and Anime4K frame delivery. A failed build or test does not
+publish an IPA. The test result bundle is uploaded as `Roxy-playback-tests-QUALITY`.
+
+After a local archive, run the same hosted simulator checks with:
+
+```bash
+bash tools/test_playback.sh
+```
+
+An available iPhone simulator runtime is required. The script adds an ephemeral
+test target to the prepared project and uses the checked-in synthetic video
+fixtures; it does not install a video encoder. These tests supplement the
+[physical-device checklist](DEVICE_TESTING.md).
 
 The Windows development workspace cannot run Xcode, `codesign`, the Apple Metal
 compiler or iOS playback. The first CI run is a required validation step. Upstream

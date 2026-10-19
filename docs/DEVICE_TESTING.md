@@ -36,6 +36,23 @@ dropped frames and thermal behavior for each run. No device is certified yet.
   tooling where available, and memory warnings. Confirm downshift/bypass status
   and that the player remains responsive without an accumulating frame queue.
 
+## Media opening regression checks (4.0.1)
+
+- Force quit Roxy, share an MKV from Files to Roxy, and confirm the player
+  appears and video starts. Repeat while Roxy is already open and while another
+  video is playing. Include a filename containing spaces and non-Latin text.
+- Repeat with iCloud Drive and an installed third-party file provider, including
+  a file that needs downloading. Keep playing after the Files sheet disappears.
+- Share two different videos with the same filename. The second import should
+  play the new video and preserve the first copy under its own library filename.
+- Open a local video with no extension through the document picker. Open a
+  folder named `Season.01` and check the natural episode order.
+- Open an invalid video, dismiss its error, then open a valid MKV. Also check
+  rapid switching, seeking, pausing, reaching the end, and stopping playback.
+- Repeat sharing with Anime4K off and Low enabled; confirm actual moving video
+  in both modes. Simulator tests cannot verify external provider grants or
+  real-device share-sheet behavior.
+
 ## Tools and release gate
 
 Use Xcode Metal API Validation, Address Sanitizer for callback lifetime testing,

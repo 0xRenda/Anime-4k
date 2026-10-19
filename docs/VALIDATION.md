@@ -107,3 +107,12 @@ also covered reused Inbox filenames and Stopped events emitted while resetting
 a previous decoder error. The playback fixtures are now checked in (under
 16 KB total), with all 288 H.264 frames in each decoded and checked locally
 using Python 3.12.14/PyAV 19.0.1; simulator tests no longer install an encoder.
+
+The first complete hosted test run compiled both app and test bundle, but its
+results were invalid: upstream `main.m` deliberately launches without the app
+delegate when XCTest is present. Consequently no app window or registered
+playback defaults existed. The hosted scheme now explicitly requests real app
+startup through `ROXY_PLAYBACK_TESTS=1`, and setup fails immediately if the
+delegate is absent. Logic tests retain their original startup behavior.
+Simulator compilation now precedes boot to reduce competing memory use on the
+runner, with separate build and runtime logs. The corrected test run is pending.

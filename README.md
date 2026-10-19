@@ -3,9 +3,11 @@
 An iPhone and iPad player based on the supplied VLC iOS source, with a Metal
 port of the supplied Anime4K shader library.
 
-**Status:** implementation and Windows-side validation are in place. No Xcode
-archive or physical-device playback test has been run in this workspace. Run
-the workflow and the device checklist before treating this as a release.
+**Status:** GitHub Actions has successfully archived the iOS app, compiled all
+49 Metal shaders, and checked the small CNN against its CPU reference. IPA
+uploads now require hosted iOS playback tests to pass. Physical-device,
+file-provider and performance testing remains pending; see
+[validation results](docs/VALIDATION.md) and the [device checklist](docs/DEVICE_TESTING.md).
 
 - iOS/iPadOS **15.0+**, arm64; universal iPhone and iPad application.
 - All **49** supplied GLSL shaders translated to Metal, with upstream weights,
@@ -31,11 +33,21 @@ and shader; they share a bundle ID and replace each other on installation.
 Pushes and pull requests build one Automatic variant. The workflow compiles all
 49 shaders for both macOS validation and iOS packaging, checks the original small
 CNN against a CPU reference if a Metal device is available, archives the actual
-VLC application, and inspects the resulting IPA for arm64 and shader resources.
+VLC application, inspects the resulting IPA for arm64 and shader resources, and
+runs hosted playback tests using real MKV and MP4 decoding before uploading it.
 
 For a signed IPA, see [BUILDING.md](docs/BUILDING.md). For architecture,
 performance limits and testing, see [ARCHITECTURE.md](docs/ARCHITECTURE.md) and
 [DEVICE_TESTING.md](docs/DEVICE_TESTING.md).
+
+## Open media
+
+Share a file from Files to **Roxy Player**, or use the app's document picker.
+Version 4.0.1 waits for scene activation and picker dismissal before opening
+playback, preserves file access for the active video, and imports Inbox copies
+into Documents. Folders use their actual resource type and natural episode
+ordering; readable files without an extension can also be opened directly.
+Opening failures report an error instead of silently discarding the request.
 
 ## Use Anime4K
 

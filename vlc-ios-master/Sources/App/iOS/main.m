@@ -17,8 +17,10 @@
 int main(int argc, char *argv[])
 {
     @autoreleasepool {
-        // Avoid launching the app during testing.
-        if (NSClassFromString(@"XCTestCase") != nil) {
+        // Logic tests skip startup, but hosted playback tests need the real
+        // app delegate, registered defaults, and scene just like a user launch.
+        BOOL launchForPlaybackTests = [NSProcessInfo.processInfo.environment[@"ROXY_PLAYBACK_TESTS"] boolValue];
+        if (NSClassFromString(@"XCTestCase") != nil && !launchForPlaybackTests) {
             return UIApplicationMain(argc, argv, nil, nil);
         } else {
             return UIApplicationMain(argc, argv, nil, NSStringFromClass([VLCAppDelegate class]));

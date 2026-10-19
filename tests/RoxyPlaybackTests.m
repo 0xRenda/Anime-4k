@@ -24,8 +24,11 @@
 - (void)setUp
 {
     [super setUp];
+    self.continueAfterFailure = NO;
     XCTAssertTrue(NSThread.isMainThread);
     self.cleanupURLs = [NSMutableArray new];
+    XCTAssertTrue([UIApplication.sharedApplication.delegate isKindOfClass:VLCAppDelegate.class],
+                  @"The hosted test must launch the real Roxy app delegate");
     XCTAssertTrue([self waitUntil:^BOOL {
         return [(VLCAppDelegate *)UIApplication.sharedApplication.delegate window].isKeyWindow;
     } seconds:10], @"The app scene did not become ready");

@@ -48,5 +48,9 @@ scheme.add_build_target(tests, false)
 scheme.add_test_target(tests)
 scheme.set_launch_target(app)
 scheme.test_action.build_configuration = 'Release'
+scheme.test_action.should_use_launch_scheme_args_env = false
+scheme.test_action.environment_variables = Xcodeproj::XCScheme::EnvironmentVariables.new([
+  { :key => 'ROXY_PLAYBACK_TESTS', :value => '1', :enabled => true }
+])
 scheme.save_as(project.path, 'Roxy-PlaybackTests', true)
 puts 'Prepared hosted Roxy playback integration tests'
