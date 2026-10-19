@@ -18,12 +18,12 @@ behavior, the independently calculated small-CNN reference, project membership,
 settings, and synthetic packaging rejection cases. Synthetic ZIP fixtures only
 exercise the verifier; they are not executable IPA artifacts.
 
-**Not executed here:** Ruby execution, CocoaPods/SPM resolution, Apple Metal
+**Not executed in the initial Windows checks:** Ruby execution, CocoaPods/SPM resolution, Apple Metal
 compilation, Swift typechecking, Xcode archive/export, code signing, CPU/GPU
 numeric parity, or physical iPhone/iPad playback/performance tests. Grammar
 parsing does not establish that code compiles against Apple's SDKs. The workflow
-contains these build checks, and the device checklist remains required. No IPA
-has been produced or claimed to work on a particular device.
+contains these build checks, and the device checklist remains required. The
+initial Windows checks produced no IPA. Later GitHub runner results follow below.
 
 ## First GitHub Actions verification failure
 
@@ -57,3 +57,23 @@ failed because VLCKit's bundled `vlc.h` includes an absent `libvlc_picture.h`.
 The Objective-C bridge now declares only the two public vmem callback functions
 and their opaque types, matching the pinned libvlc header at `005e69e67`.
 Downloaded dependencies are cached on failed builds as well as successful ones.
+
+## Successful iOS archive and IPA
+
+[Actions run 39300188565](https://github.com/0xRenda/Anime-4k/actions/runs/39300188565)
+completed successfully for commit `f6facefa165fbbdedefc9342124c8aa224a48af9`:
+
+- Linux verification: all 17 tests passed.
+- All 49 shaders compiled for both macOS and iPhoneOS.
+- The real Metal small-CNN comparison passed with maximum error 0.0009765625.
+- CocoaPods deployment installation, locked SwiftPM resolution, and VLCKit
+  binary API checks passed.
+- The full Roxy iOS app archived successfully with Xcode 26.6.
+- IPA validation confirmed the arm64 executable, iPhone and iPad device family,
+  49 Metal libraries, and all three quality presets.
+- The unsigned IPA and build logs were uploaded as workflow artifacts.
+
+The IPA artifact is `Roxy-Player-automatic-unsigned` (37,189,069-byte artifact
+ZIP, retained for 14 days). Signing and physical-device playback/performance
+testing remain outstanding. This successful build does not certify device
+performance, HDR preservation, or enhanced Picture in Picture support.
