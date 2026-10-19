@@ -35,5 +35,18 @@ components explicitly. The manifest and advanced selection lists were regenerate
 
 The failure was reproduced locally by simulating Linux path comparisons. All
 17 tests now pass, including a regression test that simulates both platforms
-and compares every generated file byte-for-byte. A new Actions run is needed
-to validate the fix on the actual Linux runner and continue to the macOS build.
+and compares every generated file byte-for-byte.
+
+## First macOS build results
+
+[Actions run 39296829334](https://github.com/0xRenda/Anime-4k/actions/runs/39296829334)
+passed Linux verification and all 17 tests. On the macOS ARM64 runner with
+Xcode 26.6, all 49 Metal shaders compiled. The Swift engine and smoke harness
+compiled and executed on Metal: the small-CNN CPU/GPU comparison passed with
+maximum absolute error **0.0009765625** (tolerance 0.012).
+
+CocoaPods then rejected the supplied OneDriveSDK spec checksum in deployment
+mode. The lockfile now records the checksum reported by CocoaPods 1.16.2 for
+the already-pinned `810f82da` commit; no dependency versions or source commits
+were changed. The app archive, IPA packaging, signing, and physical-device
+tests are still pending.
