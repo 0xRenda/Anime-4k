@@ -24,3 +24,16 @@ numeric parity, or physical iPhone/iPad playback/performance tests. Grammar
 parsing does not establish that code compiles against Apple's SDKs. The workflow
 contains these build checks, and the device checklist remains required. No IPA
 has been produced or claimed to work on a particular device.
+
+## First GitHub Actions verification failure
+
+The initial Linux verification run failed at the generated-shader check. Python
+compares `Path` values without case on Windows and with case on Linux, which
+changed the order of four entries in `manifest.json`. Shader code and weights
+were identical. The generator now sorts by case-preserving relative path
+components explicitly. The manifest and advanced selection lists were regenerated.
+
+The failure was reproduced locally by simulating Linux path comparisons. All
+17 tests now pass, including a regression test that simulates both platforms
+and compares every generated file byte-for-byte. A new Actions run is needed
+to validate the fix on the actual Linux runner and continue to the macOS build.

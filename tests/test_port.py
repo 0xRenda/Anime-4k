@@ -1,10 +1,12 @@
 import hashlib
+import builtins
 import importlib.util
 import json
-from pathlib import Path
+from pathlib import Path, PurePosixPath, PureWindowsPath
 import plistlib
 import re
 import unittest
+from unittest import mock
 import xml.etree.ElementTree as ET
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -70,6 +72,23 @@ class ShaderPortTests(unittest.TestCase):
     def test_generated_sources_match_inputs(self):
         for name, expected in port.generate().items():
             with self.subTest(name=name): self.assertEqual((port.OUTPUT / name).read_bytes(), expected)
+
+    def test_windows_and_linux_generate_identical_files(self):
+        def platform_sort(path_type):
+            def sort(values, *, key=None, reverse=False):
+                values = list(values)
+                if key is None and values and isinstance(values[0], Path):
+                    key = lambda path: path_type(path.as_posix())
+                return builtins.sorted(values, key=key, reverse=reverse)
+            return sort
+
+        # Simulate both platforms' default Path comparisons even when the test
+        # itself runs on Windows. This reproduces the first Actions failure.
+        with mock.patch.object(port, 'sorted', platform_sort(PureWindowsPath), create=True):
+            windows = port.generate()
+        with mock.patch.object(port, 'sorted', platform_sort(PurePosixPath), create=True):
+            linux = port.generate()
+        self.assertEqual(windows, linux)
 
     def test_original_weights_and_provenance_preserved(self):
         for shader in MANIFEST['shaders']:

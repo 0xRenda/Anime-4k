@@ -4252,196 +4252,6 @@
       ]
     },
     {
-      "name": "Anime4K_Upscale_Deblur_DoG_x2",
-      "source": "Upscale/Anime4K_Upscale_Deblur_DoG_x2.glsl",
-      "sha256": "2408b7d334803bae2e463f75d4e293146715609ed576dddfd22e2a76189eb161",
-      "passes": [
-        {
-          "description": "Anime4K-v3.2-Upscale-Deblur-DoG-x2-Luma",
-          "binds": [
-            "HOOKED"
-          ],
-          "hook": "MAIN",
-          "save": "LINELUMA",
-          "components": 1,
-          "function": "pass_0"
-        },
-        {
-          "description": "Anime4K-v3.2-Upscale-Deblur-DoG-x2-Kernel-X",
-          "binds": [
-            "HOOKED",
-            "LINELUMA"
-          ],
-          "when": "OUTPUT.w MAIN.w / 1.200 > OUTPUT.h MAIN.h / 1.200 > *",
-          "hook": "MAIN",
-          "save": "GAUSS_X2",
-          "components": 3,
-          "function": "pass_1"
-        },
-        {
-          "description": "Anime4K-v3.2-Upscale-Deblur-DoG-x2-Kernel-Y",
-          "binds": [
-            "HOOKED",
-            "GAUSS_X2"
-          ],
-          "when": "OUTPUT.w MAIN.w / 1.200 > OUTPUT.h MAIN.h / 1.200 > *",
-          "hook": "MAIN",
-          "save": "GAUSS_X2",
-          "components": 3,
-          "function": "pass_2"
-        },
-        {
-          "description": "Anime4K-v3.2-Upscale-Deblur-DoG-x2-Apply",
-          "binds": [
-            "HOOKED",
-            "LINELUMA",
-            "GAUSS_X2"
-          ],
-          "when": "OUTPUT.w MAIN.w / 1.200 > OUTPUT.h MAIN.h / 1.200 > *",
-          "hook": "MAIN",
-          "width": "MAIN.w 2 *",
-          "height": "MAIN.h 2 *",
-          "function": "pass_3"
-        }
-      ]
-    },
-    {
-      "name": "Anime4K_Upscale_Deblur_Original_x2",
-      "source": "Upscale/Anime4K_Upscale_Deblur_Original_x2.glsl",
-      "sha256": "4a88f9a4437aa5cca1e2055a45db533b58cf9c955763fb64cf38033f0f63904f",
-      "passes": [
-        {
-          "description": "Anime4K-v3.2-Upscale-Deblur-Original-x2-Luma",
-          "binds": [
-            "HOOKED"
-          ],
-          "hook": "MAIN",
-          "save": "LINELUMA",
-          "components": 1,
-          "function": "pass_0"
-        },
-        {
-          "description": "Anime4K-v3.2-Upscale-Deblur-Original-x2-Kernel-X",
-          "binds": [
-            "HOOKED",
-            "LINELUMA"
-          ],
-          "hook": "MAIN",
-          "save": "LUMAD",
-          "width": "MAIN.w 2 *",
-          "height": "MAIN.h 2 *",
-          "components": 2,
-          "function": "pass_1"
-        },
-        {
-          "description": "Anime4K-v3.2-Upscale-Deblur-Original-x2-Kernel-Y",
-          "binds": [
-            "HOOKED",
-            "LUMAD"
-          ],
-          "hook": "MAIN",
-          "save": "LUMAD",
-          "width": "MAIN.w 2 *",
-          "height": "MAIN.h 2 *",
-          "components": 2,
-          "function": "pass_2"
-        },
-        {
-          "description": "Anime4K-v3.2-Upscale-Deblur-Original-x2-Kernel-X",
-          "binds": [
-            "HOOKED",
-            "LUMAD"
-          ],
-          "hook": "MAIN",
-          "save": "LUMAMM",
-          "width": "MAIN.w 2 *",
-          "height": "MAIN.h 2 *",
-          "components": 2,
-          "function": "pass_3"
-        },
-        {
-          "description": "Anime4K-v3.2-Upscale-Deblur-Original-x2-Kernel-Y",
-          "binds": [
-            "HOOKED",
-            "LUMAD",
-            "LUMAMM"
-          ],
-          "hook": "MAIN",
-          "save": "LUMAMM",
-          "width": "MAIN.w 2 *",
-          "height": "MAIN.h 2 *",
-          "components": 2,
-          "function": "pass_4"
-        },
-        {
-          "description": "Anime4K-v3.2-Upscale-Deblur-Original-x2-Apply",
-          "binds": [
-            "HOOKED",
-            "LUMAD",
-            "LUMAMM"
-          ],
-          "hook": "MAIN",
-          "width": "MAIN.w 2 *",
-          "height": "MAIN.h 2 *",
-          "function": "pass_5"
-        }
-      ]
-    },
-    {
-      "name": "Anime4K_Upscale_DoG_x2",
-      "source": "Upscale/Anime4K_Upscale_DoG_x2.glsl",
-      "sha256": "33dbf76d855575b7a99885885c2c7c692444cf776f22048b4a611dab178e66e3",
-      "passes": [
-        {
-          "description": "Anime4K-v3.2-Upscale-DoG-x2-Luma",
-          "binds": [
-            "HOOKED"
-          ],
-          "hook": "MAIN",
-          "save": "LINELUMA",
-          "components": 1,
-          "function": "pass_0"
-        },
-        {
-          "description": "Anime4K-v3.2-Upscale-DoG-x2-Kernel-X",
-          "binds": [
-            "HOOKED",
-            "LINELUMA"
-          ],
-          "when": "OUTPUT.w MAIN.w / 1.200 > OUTPUT.h MAIN.h / 1.200 > *",
-          "hook": "MAIN",
-          "save": "GAUSS_X2",
-          "components": 3,
-          "function": "pass_1"
-        },
-        {
-          "description": "Anime4K-v3.2-Upscale-DoG-x2-Kernel-Y",
-          "binds": [
-            "HOOKED",
-            "GAUSS_X2"
-          ],
-          "when": "OUTPUT.w MAIN.w / 1.200 > OUTPUT.h MAIN.h / 1.200 > *",
-          "hook": "MAIN",
-          "save": "GAUSS_X2",
-          "components": 3,
-          "function": "pass_2"
-        },
-        {
-          "description": "Anime4K-v3.2-Upscale-DoG-x2-Apply",
-          "binds": [
-            "HOOKED",
-            "LINELUMA",
-            "GAUSS_X2"
-          ],
-          "when": "OUTPUT.w MAIN.w / 1.200 > OUTPUT.h MAIN.h / 1.200 > *",
-          "hook": "MAIN",
-          "width": "MAIN.w 2 *",
-          "height": "MAIN.h 2 *",
-          "function": "pass_3"
-        }
-      ]
-    },
-    {
       "name": "Anime4K_Upscale_DTD_x2",
       "source": "Upscale/Anime4K_Upscale_DTD_x2.glsl",
       "sha256": "b6597cace43fc9a6be57a8eebc540fe20caa8389fae0aad1157a9c15fc410ef3",
@@ -4662,6 +4472,196 @@
           "width": "MAIN.w 2 *",
           "height": "MAIN.h 2 *",
           "function": "pass_17"
+        }
+      ]
+    },
+    {
+      "name": "Anime4K_Upscale_Deblur_DoG_x2",
+      "source": "Upscale/Anime4K_Upscale_Deblur_DoG_x2.glsl",
+      "sha256": "2408b7d334803bae2e463f75d4e293146715609ed576dddfd22e2a76189eb161",
+      "passes": [
+        {
+          "description": "Anime4K-v3.2-Upscale-Deblur-DoG-x2-Luma",
+          "binds": [
+            "HOOKED"
+          ],
+          "hook": "MAIN",
+          "save": "LINELUMA",
+          "components": 1,
+          "function": "pass_0"
+        },
+        {
+          "description": "Anime4K-v3.2-Upscale-Deblur-DoG-x2-Kernel-X",
+          "binds": [
+            "HOOKED",
+            "LINELUMA"
+          ],
+          "when": "OUTPUT.w MAIN.w / 1.200 > OUTPUT.h MAIN.h / 1.200 > *",
+          "hook": "MAIN",
+          "save": "GAUSS_X2",
+          "components": 3,
+          "function": "pass_1"
+        },
+        {
+          "description": "Anime4K-v3.2-Upscale-Deblur-DoG-x2-Kernel-Y",
+          "binds": [
+            "HOOKED",
+            "GAUSS_X2"
+          ],
+          "when": "OUTPUT.w MAIN.w / 1.200 > OUTPUT.h MAIN.h / 1.200 > *",
+          "hook": "MAIN",
+          "save": "GAUSS_X2",
+          "components": 3,
+          "function": "pass_2"
+        },
+        {
+          "description": "Anime4K-v3.2-Upscale-Deblur-DoG-x2-Apply",
+          "binds": [
+            "HOOKED",
+            "LINELUMA",
+            "GAUSS_X2"
+          ],
+          "when": "OUTPUT.w MAIN.w / 1.200 > OUTPUT.h MAIN.h / 1.200 > *",
+          "hook": "MAIN",
+          "width": "MAIN.w 2 *",
+          "height": "MAIN.h 2 *",
+          "function": "pass_3"
+        }
+      ]
+    },
+    {
+      "name": "Anime4K_Upscale_Deblur_Original_x2",
+      "source": "Upscale/Anime4K_Upscale_Deblur_Original_x2.glsl",
+      "sha256": "4a88f9a4437aa5cca1e2055a45db533b58cf9c955763fb64cf38033f0f63904f",
+      "passes": [
+        {
+          "description": "Anime4K-v3.2-Upscale-Deblur-Original-x2-Luma",
+          "binds": [
+            "HOOKED"
+          ],
+          "hook": "MAIN",
+          "save": "LINELUMA",
+          "components": 1,
+          "function": "pass_0"
+        },
+        {
+          "description": "Anime4K-v3.2-Upscale-Deblur-Original-x2-Kernel-X",
+          "binds": [
+            "HOOKED",
+            "LINELUMA"
+          ],
+          "hook": "MAIN",
+          "save": "LUMAD",
+          "width": "MAIN.w 2 *",
+          "height": "MAIN.h 2 *",
+          "components": 2,
+          "function": "pass_1"
+        },
+        {
+          "description": "Anime4K-v3.2-Upscale-Deblur-Original-x2-Kernel-Y",
+          "binds": [
+            "HOOKED",
+            "LUMAD"
+          ],
+          "hook": "MAIN",
+          "save": "LUMAD",
+          "width": "MAIN.w 2 *",
+          "height": "MAIN.h 2 *",
+          "components": 2,
+          "function": "pass_2"
+        },
+        {
+          "description": "Anime4K-v3.2-Upscale-Deblur-Original-x2-Kernel-X",
+          "binds": [
+            "HOOKED",
+            "LUMAD"
+          ],
+          "hook": "MAIN",
+          "save": "LUMAMM",
+          "width": "MAIN.w 2 *",
+          "height": "MAIN.h 2 *",
+          "components": 2,
+          "function": "pass_3"
+        },
+        {
+          "description": "Anime4K-v3.2-Upscale-Deblur-Original-x2-Kernel-Y",
+          "binds": [
+            "HOOKED",
+            "LUMAD",
+            "LUMAMM"
+          ],
+          "hook": "MAIN",
+          "save": "LUMAMM",
+          "width": "MAIN.w 2 *",
+          "height": "MAIN.h 2 *",
+          "components": 2,
+          "function": "pass_4"
+        },
+        {
+          "description": "Anime4K-v3.2-Upscale-Deblur-Original-x2-Apply",
+          "binds": [
+            "HOOKED",
+            "LUMAD",
+            "LUMAMM"
+          ],
+          "hook": "MAIN",
+          "width": "MAIN.w 2 *",
+          "height": "MAIN.h 2 *",
+          "function": "pass_5"
+        }
+      ]
+    },
+    {
+      "name": "Anime4K_Upscale_DoG_x2",
+      "source": "Upscale/Anime4K_Upscale_DoG_x2.glsl",
+      "sha256": "33dbf76d855575b7a99885885c2c7c692444cf776f22048b4a611dab178e66e3",
+      "passes": [
+        {
+          "description": "Anime4K-v3.2-Upscale-DoG-x2-Luma",
+          "binds": [
+            "HOOKED"
+          ],
+          "hook": "MAIN",
+          "save": "LINELUMA",
+          "components": 1,
+          "function": "pass_0"
+        },
+        {
+          "description": "Anime4K-v3.2-Upscale-DoG-x2-Kernel-X",
+          "binds": [
+            "HOOKED",
+            "LINELUMA"
+          ],
+          "when": "OUTPUT.w MAIN.w / 1.200 > OUTPUT.h MAIN.h / 1.200 > *",
+          "hook": "MAIN",
+          "save": "GAUSS_X2",
+          "components": 3,
+          "function": "pass_1"
+        },
+        {
+          "description": "Anime4K-v3.2-Upscale-DoG-x2-Kernel-Y",
+          "binds": [
+            "HOOKED",
+            "GAUSS_X2"
+          ],
+          "when": "OUTPUT.w MAIN.w / 1.200 > OUTPUT.h MAIN.h / 1.200 > *",
+          "hook": "MAIN",
+          "save": "GAUSS_X2",
+          "components": 3,
+          "function": "pass_2"
+        },
+        {
+          "description": "Anime4K-v3.2-Upscale-DoG-x2-Apply",
+          "binds": [
+            "HOOKED",
+            "LINELUMA",
+            "GAUSS_X2"
+          ],
+          "when": "OUTPUT.w MAIN.w / 1.200 > OUTPUT.h MAIN.h / 1.200 > *",
+          "hook": "MAIN",
+          "width": "MAIN.w 2 *",
+          "height": "MAIN.h 2 *",
+          "function": "pass_3"
         }
       ]
     },

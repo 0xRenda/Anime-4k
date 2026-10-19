@@ -1055,10 +1055,10 @@
 				<string>Upscale_CNN_x2_S</string>
 				<string>Upscale_CNN_x2_UL</string>
 				<string>Upscale_CNN_x2_VL</string>
+				<string>Upscale_DTD_x2</string>
 				<string>Upscale_Deblur_DoG_x2</string>
 				<string>Upscale_Deblur_Original_x2</string>
 				<string>Upscale_DoG_x2</string>
-				<string>Upscale_DTD_x2</string>
 				<string>Upscale_GAN_x2_M</string>
 				<string>Upscale_GAN_x2_S</string>
 				<string>Upscale_GAN_x3_L</string>
@@ -1108,10 +1108,10 @@
 				<string>Anime4K_Upscale_CNN_x2_S</string>
 				<string>Anime4K_Upscale_CNN_x2_UL</string>
 				<string>Anime4K_Upscale_CNN_x2_VL</string>
+				<string>Anime4K_Upscale_DTD_x2</string>
 				<string>Anime4K_Upscale_Deblur_DoG_x2</string>
 				<string>Anime4K_Upscale_Deblur_Original_x2</string>
 				<string>Anime4K_Upscale_DoG_x2</string>
-				<string>Anime4K_Upscale_DTD_x2</string>
 				<string>Anime4K_Upscale_GAN_x2_M</string>
 				<string>Anime4K_Upscale_GAN_x2_S</string>
 				<string>Anime4K_Upscale_GAN_x3_L</string>
