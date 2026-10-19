@@ -47,8 +47,9 @@ class InboxManager {
     static func moveToDocuments(_ url: URL) -> URL? {
         moveLock.lock()
         defer { moveLock.unlock() }
-        let source = url.standardizedFileURL
-        if let moved = movedFiles[source], FileManager.default.fileExists(atPath: moved.path) {
+        let source = url.resolvingSymlinksInPath().standardizedFileURL
+        if !FileManager.default.fileExists(atPath: source.path),
+           let moved = movedFiles[source], FileManager.default.fileExists(atPath: moved.path) {
             return moved
         }
         guard let documentsURL = documentsURL else {

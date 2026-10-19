@@ -131,6 +131,38 @@
     [self waitForExpectationsWithTimeout:10 handler:nil];
 }
 
+- (void)testSharingTheSameFilenameImportsTheNewFile
+{
+    NSURL *documents = [NSFileManager.defaultManager URLsForDirectory:NSDocumentDirectory inDomains:NSUserDomainMask].firstObject;
+    NSURL *inbox = [documents URLByAppendingPathComponent:@"Inbox"];
+    NSString *name = [NSString stringWithFormat:@"Repeat-%@.mkv", NSUUID.UUID.UUIDString];
+    NSURL *url = [self copyFixture:@"mkv" into:inbox name:name];
+    __block NSURL *firstDestination = nil;
+    XCTestExpectation *first = [self expectationWithDescription:@"First import"];
+    Class<RoxyFilePreparer> preparer = (Class<RoxyFilePreparer>)NSClassFromString(@"RoxyMediaFileAccess");
+    [preparer prepareURLs:@[url] completion:^(NSArray<id<RoxyFileAccess>> *accesses, NSError *error) {
+        XCTAssertNil(error);
+        firstDestination = accesses.firstObject.url;
+        if (firstDestination) [self.cleanupURLs addObject:firstDestination];
+        [accesses.firstObject close];
+        [first fulfill];
+    }];
+    [self waitForExpectationsWithTimeout:10 handler:nil];
+    NSData *expected = [NSData dataWithContentsOfURL:[[NSBundle bundleForClass:self.class] URLForResource:@"shared" withExtension:@"mp4"]];
+    [self copyFixture:@"mp4" into:inbox name:name];
+    XCTestExpectation *second = [self expectationWithDescription:@"Second import with reused filename"];
+    [preparer prepareURLs:@[url] completion:^(NSArray<id<RoxyFileAccess>> *accesses, NSError *error) {
+        XCTAssertNil(error);
+        NSURL *destination = accesses.firstObject.url;
+        if (destination) [self.cleanupURLs addObject:destination];
+        XCTAssertNotEqualObjects(destination.path, firstDestination.path);
+        XCTAssertEqualObjects([NSData dataWithContentsOfURL:destination], expected);
+        [accesses.firstObject close];
+        [second fulfill];
+    }];
+    [self waitForExpectationsWithTimeout:10 handler:nil];
+}
+
 - (void)testPickerOpensAppOwnedFileWithoutExtension
 {
     NSURL *url = [self copyFixture:@"mkv" into:self.testDirectory name:@"movie without extension"];
@@ -192,6 +224,25 @@
     [service playMediaList:[[VLCMediaList alloc] initWithArray:@[[VLCMedia mediaWithURL:second]]] firstIndex:0 subtitlesFilePath:nil];
     [service playMediaList:[[VLCMediaList alloc] initWithArray:@[[VLCMedia mediaWithURL:last]]] firstIndex:0 subtitlesFilePath:nil];
     [self assertPlaying:last];
+}
+
+- (void)testValidVideoOpensAfterDecoderFailure
+{
+    VLCPlaybackService *service = VLCPlaybackService.sharedInstance;
+    NSURL *folder = self.testDirectory;
+    NSURL *valid = [self copyFixture:@"mkv" into:folder name:@"valid.mkv"];
+    NSURL *broken = [folder URLByAppendingPathComponent:@"broken.mkv"];
+    [@"This is not a video file." writeToURL:broken atomically:YES encoding:NSUTF8StringEncoding error:nil];
+    XCTestExpectation *failure = [self expectationWithDescription:@"VLC rejects the invalid video"];
+    id observer = [NSNotificationCenter.defaultCenter addObserverForName:VLCPlaybackServicePlaybackDidFail object:service queue:nil usingBlock:^(NSNotification *notification) {
+        [failure fulfill];
+    }];
+    [UIApplication.sharedApplication.delegate application:UIApplication.sharedApplication openURL:broken options:@{}];
+    [self waitForExpectationsWithTimeout:15 handler:nil];
+    [NSNotificationCenter.defaultCenter removeObserver:observer];
+    XCTAssertTrue([self waitUntil:^BOOL { return !service.playerIsSetup; } seconds:15]);
+    [UIApplication.sharedApplication.delegate application:UIApplication.sharedApplication openURL:valid options:@{}];
+    [self assertPlaying:valid];
 }
 
 - (void)testSharedMKVReachesAnime4KFrameQueue

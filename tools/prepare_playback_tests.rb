@@ -26,7 +26,7 @@ tests.build_configurations.each do |config|
   settings['ENABLE_TESTING_SEARCH_PATHS'] = 'YES'
   settings['OTHER_LDFLAGS'] = ['-framework', 'XCTest', '-framework', 'VLCKit']
   settings['FRAMEWORK_SEARCH_PATHS'] = ['$(inherited)', '$(BUILT_PRODUCTS_DIR)', '$(BUILT_PRODUCTS_DIR)/PackageFrameworks', '$(PLATFORM_DIR)/Developer/Library/Frameworks']
-  settings['HEADER_SEARCH_PATHS'] = ['$(inherited)', '$(SRCROOT)/Sources/Playback/Control', '$(SRCROOT)/Sources/App/iOS', '$(SRCROOT)/Sources/Cloud/Document Picker']
+  settings['HEADER_SEARCH_PATHS'] = ['$(inherited)', '$(SRCROOT)/Sources/Playback/Control', '$(SRCROOT)/Sources/App/iOS', '"$(SRCROOT)/Sources/Cloud/Document Picker"']
 end
 app.build_configurations.each do |config|
   config.build_settings['ENABLE_TESTABILITY'] = 'YES'
@@ -37,13 +37,14 @@ source = File.join(root, 'tests/RoxyPlaybackTests.m')
 reference = group.files.find { |file| file.path == source } || group.new_file(source)
 tests.source_build_phase.add_file_reference(reference, true)
 %w[mkv mp4].each do |extension|
-  path = File.join(root, '.build/playback-fixtures/shared.' + extension)
+  path = File.join(root, 'tests/fixtures/shared.' + extension)
   reference = group.files.find { |file| file.path == path } || group.new_file(path)
   tests.resources_build_phase.add_file_reference(reference, true)
 end
 project.save
 scheme = Xcodeproj::XCScheme.new
 scheme.add_build_target(app)
+scheme.add_build_target(tests, false)
 scheme.add_test_target(tests)
 scheme.set_launch_target(app)
 scheme.test_action.build_configuration = 'Release'

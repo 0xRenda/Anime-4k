@@ -1310,7 +1310,9 @@ static const float kVLCPlaybackRateMaximum = 8.0f;
             case VLCMediaPlayerStateStopped: {
                 APLog(@"%s: stopped", __func__);
 #if TARGET_OS_IOS
-                if (self->_roxyAwaitingStart && self->_roxyStopAfterStart) break;
+                // Resetting a previous error can emit Stopped before the new
+                // queued play emits Opening. It is not the new movie's EOF.
+                if (self->_roxyAwaitingStart) break;
                 if (self->_roxyWaitingForStop) {
                     [self _roxyFinishStop];
                     break;

@@ -2,15 +2,10 @@
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
-mkdir -p .build/playback-fixtures build
-if ! command -v ffmpeg >/dev/null 2>&1; then
-  brew install ffmpeg
-fi
-# Generated test media contains only a synthetic moving test pattern.
-ffmpeg -hide_banner -loglevel error -y -f lavfi -i 'testsrc=size=64x48:rate=24' \
-  -t 12 -c:v libx264 -pix_fmt yuv420p -an .build/playback-fixtures/shared.mkv
-ffmpeg -hide_banner -loglevel error -y -i .build/playback-fixtures/shared.mkv \
-  -c copy .build/playback-fixtures/shared.mp4
+export ROXY_QUALITY="${ROXY_QUALITY:-automatic}"
+mkdir -p build
+test -s tests/fixtures/shared.mkv
+test -s tests/fixtures/shared.mp4
 bundle exec ruby tools/prepare_playback_tests.rb
 xcrun simctl list devices available --json > .build/playback-simulators.json
 SIMULATOR_ID="$(python3 - <<'PY'

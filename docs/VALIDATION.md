@@ -95,8 +95,15 @@ received while VLCKit still has its initial play operation queued. Stale parsing
 callbacks cannot expand an unrelated replacement queue.
 
 Local shader freshness, all 17 Python tests, Swift/Bash grammar parsing, workflow
-YAML parsing, and whitespace checks passed. Eight new hosted iOS tests exercise
+YAML parsing, and whitespace checks passed. Ten new hosted iOS tests exercise
 MKV sharing, local MP4 access, missing files, extensionless documents, dotted
 folder names, completion ownership, rapid replacements, and actual delivery to
-the Anime4K frame queue. These tests must pass on the macOS runner before the
+the Anime4K frame queue, repeated filenames, and recovery from decoder errors.
+These tests must pass on the macOS runner before the
 workflow uploads the new IPA. Physical-device/file-provider testing is pending.
+
+The initial 4.0.1 runner archived the iOS app successfully. Subsequent review
+also covered reused Inbox filenames and Stopped events emitted while resetting
+a previous decoder error. The playback fixtures are now checked in (under
+16 KB total), with all 288 H.264 frames in each decoded and checked locally
+using Python 3.12.14/PyAV 19.0.1; simulator tests no longer install an encoder.
