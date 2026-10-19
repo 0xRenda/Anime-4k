@@ -2,9 +2,29 @@
 #import "VLC-Swift.h"
 #import <CoreVideo/CoreVideo.h>
 #import <objc/runtime.h>
-#import <VLCKit/vlc/vlc.h>
 #include <stdlib.h>
 #include <string.h>
+
+// VLCKit 4.0.0-a25 ships an incomplete libvlc header tree: vlc.h includes
+// libvlc_media.h, which needs the absent libvlc_picture.h. Declare only the
+// public vmem ABI used here, matching include/vlc/libvlc_media_player.h at
+// the pinned libvlc commit 005e69e67. CI checks both exported symbols before
+// archiving. No LibVLC structures are accessed through this boundary.
+typedef struct libvlc_media_player_t libvlc_media_player_t;
+typedef void *(*RoxyVideoLockCallback)(void *opaque, void **planes);
+typedef void (*RoxyVideoUnlockCallback)(void *opaque, void *picture, void *const *planes);
+typedef void (*RoxyVideoDisplayCallback)(void *opaque, void *picture);
+typedef unsigned (*RoxyVideoFormatCallback)(void **opaque, char *chroma, unsigned *width,
+                                             unsigned *height, unsigned *pitches, unsigned *lines);
+typedef void (*RoxyVideoCleanupCallback)(void *opaque);
+
+extern __attribute__((visibility("default")))
+void libvlc_video_set_callbacks(libvlc_media_player_t *player, RoxyVideoLockCallback lock,
+                                RoxyVideoUnlockCallback unlock, RoxyVideoDisplayCallback display,
+                                void *opaque);
+extern __attribute__((visibility("default")))
+void libvlc_video_set_format_callbacks(libvlc_media_player_t *player, RoxyVideoFormatCallback setup,
+                                       RoxyVideoCleanupCallback cleanup);
 
 // The pinned VLCKit 4.0.0-a25 implements this accessor. Keeping the small
 // compatibility boundary here avoids private ivar offsets and KVC. CI checks

@@ -50,3 +50,10 @@ mode. The lockfile now records the checksum reported by CocoaPods 1.16.2 for
 the already-pinned `810f82da` commit; no dependency versions or source commits
 were changed. The app archive, IPA packaging, signing, and physical-device
 tests are still pending.
+
+The next run passed CocoaPods deployment installation, all 49 iOS Metal shader
+compilations, SwiftPM resolution, and the pinned VLCKit symbol checks. Archiving
+failed because VLCKit's bundled `vlc.h` includes an absent `libvlc_picture.h`.
+The Objective-C bridge now declares only the two public vmem callback functions
+and their opaque types, matching the pinned libvlc header at `005e69e67`.
+Downloaded dependencies are cached on failed builds as well as successful ones.

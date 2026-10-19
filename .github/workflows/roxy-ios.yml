@@ -61,7 +61,8 @@ jobs:
           ruby-version: '3.3'
           bundler-cache: true
       - run: ruby -c tools/prepare_ci.rb
-      - uses: actions/cache@v4
+      - uses: actions/cache/restore@v4
+        id: dependencies
         with:
           path: |
             vlc-ios-master/Pods
@@ -97,6 +98,15 @@ jobs:
           name: Roxy-logs-${{ matrix.quality }}
           path: build/*.log
           if-no-files-found: ignore
+      - name: Cache downloaded dependencies
+        if: ${{ always() && !cancelled() && steps.dependencies.outputs.cache-primary-key != '' && steps.dependencies.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            vlc-ios-master/Pods
+            .build/SourcePackages
+            ~/Library/Caches/CocoaPods
+          key: ${{ steps.dependencies.outputs.cache-primary-key }}
       - name: Remove temporary signing credentials
         if: ${{ always() && github.event_name == 'workflow_dispatch' && inputs.signed }}
         shell: bash
