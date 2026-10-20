@@ -552,7 +552,11 @@ NSString *const VLCPlayerDisplayControllerHideMiniPlayer = @"VLCPlayerDisplayCon
         dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.05 * NSEC_PER_SEC)), dispatch_get_main_queue(), retry);
         return;
     }
-    if ([self _isPlaybackControllerPresentedOrTransitioning:controller]) return;
+    // A dismissed navigation controller can retain its presenting relationship
+    // through a transaction/snapshot. The active window is authoritative: an
+    // off-screen predecessor must not suppress the next open request.
+    BOOL transitioning = container.isBeingPresented || container.isBeingDismissed;
+    if ([self _isPlaybackControllerPresentedOrTransitioning:controller] && (presented || transitioning)) return;
     if (audio) [self _presentAudioViewControllerAnimated:[self shouldAnimate]];
     else [self _presentMovieViewControllerAnimated:[self shouldAnimate]];
 }
