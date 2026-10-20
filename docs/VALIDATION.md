@@ -148,3 +148,70 @@ The new IPA was left on GitHub for the user to download. Hosted tests validate
 the app's file-opening and playback paths, but do not replace physical iPhone/
 iPad share-sheet, external file-provider, signing, or sustained performance
 testing. Those checks remain in the device checklist.
+
+
+## 4.0.2 color correction and interface
+
+The reported purple/blue video exposed a real channel-layout error in the
+callback bridge. VLC 4 at the pinned libvlc revision `005e69e67` defines RV32 as
+**XRGB in memory order**. Treating that buffer as BGRA moved padding and RGB
+bytes into the wrong channels. The bridge now requests the explicit `BGRA`
+fourcc used by both its CoreVideo pixel buffer and Metal texture.
+
+The earlier callback-queue test checked delivery, not pixel colors, so it could
+not detect this error. New tests decode synthetic BT.709 H.264 8-bit and HEVC
+10-bit MKVs through the real app and read back the production presentation
+shader. Each quality must produce 256×144 from a 128×72 video, preserve primary
+and neutral colors, and support Original comparison. Retina drawable dimensions
+are checked against the window screen scale. The independent small-CNN CPU/Metal
+reference remains a separate check on shader arithmetic.
+
+The first expanded run compiled the app but withheld the IPA after catching a
+simulator target mismatch: loading an iPhoneOS metallib could succeed before
+pipeline creation rejected it. CI now compiles separate simulator libraries
+only after packaging the device archive. Runtime fallback validates the entire
+pipeline chain before accepting a precompiled library. A paused restart waits
+for an initial callback picture, and its test uses the API's normalized 0–1
+position. File grants remain retained through the asynchronous output restart.
+
+The visible Anime4K button and glass panel expose live quality selection,
+original comparison, advanced shaders and actual resolution/pass/GPU metrics.
+The library has a Roxy welcome card and Open Files action, and the app menu
+provides direct Anime4K access. Native Liquid Glass requires iOS 26+; older
+supported devices use system material. No iOS 27 SDK compatibility is claimed.
+
+
+Repeated assignments of the same video output previously detached and reattached
+it, clearing paused frames. Output attachment now runs immediately on the main
+thread and leaves an unchanged parent in place. The latest frame remains held
+through transitions; inactive queues still reject incoming frames. Metadata
+cannot classify a confirmed video track as audio-only. Rendering tests wait for
+a visible, settled player and hold a delivered frame during pipeline preparation.
+The automated resume preference is explicitly Never (-1), rather than Ask (0).
+
+### Successful 4.0.2 build
+
+[Actions run 39394555839](https://github.com/0xRenda/Anime-4k/actions/runs/39394555839),
+source commit `6612e1e705413d2fd0729bcef3e103a7433ace6b`, passed:
+
+- All 17 source/packaging tests and generated-shader verification.
+- All 49 shaders compiled for macOS, iPhoneOS and iPhone Simulator; the separate
+  small-CNN CPU/Metal parity check passed.
+- All 15 hosted iOS tests, with zero failures, including actual 2× output on
+  Low/Medium/High for both H.264 8-bit and HEVC 10-bit SDR, original comparison,
+  Retina dimensions, paused live enabling, file access, sharing and reopening.
+- The visible Anime4K button opened the glass settings panel. Player, menu,
+  library and rendered-color PNGs were saved in the validation artifact.
+
+All 64 sampled color bars passed: maximum RGB channel error **4/255**;
+maximum red/blue difference in neutral samples **0/255**. These are
+synthetic test samples, not a certification of every media color space.
+
+Version **4.0.2**, build **1017**, was uploaded as
+`Roxy-Player-automatic-unsigned` (artifact ID **12252106873**; ZIP size
+**37,224,543 bytes**, retained for 14 days). The new IPA was left on GitHub;
+it was not downloaded into the Windows workspace. The app includes all quality
+presets and advanced shaders. Signing, physical iPhone/iPad playback, external
+file-provider grants and sustained device power/performance still require the
+device checklist. The enhanced path remains SDR; HDR and enhanced Picture in
+Picture are not certified by these tests.
