@@ -42,7 +42,9 @@
     [NSUserDefaults.standardUserDefaults setBool:NO forKey:@"RoxyAnime4KEnabled"];
     [NSUserDefaults.standardUserDefaults setBool:NO forKey:@"RoxyAnime4KPreviewOriginal"];
     [NSUserDefaults.standardUserDefaults setObject:@"preset" forKey:@"RoxyAnime4KShader"];
-    [NSUserDefaults.standardUserDefaults setInteger:0 forKey:@"ContinuePlayback"];
+    // Values are Never=-1, Ask=0, Always=1. A resume prompt intentionally
+    // blocks presentation and must not leak between independent test cases.
+    [NSUserDefaults.standardUserDefaults setInteger:-1 forKey:@"ContinuePlayback"];
     [NSUserDefaults.standardUserDefaults setBool:YES forKey:@"AlwaysUseFullscreenForVideo"];
     [self stopAndWait];
 }
