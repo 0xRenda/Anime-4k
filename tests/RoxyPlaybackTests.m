@@ -430,7 +430,7 @@
     XCTAssertTrue([self waitUntil:^BOOL { return service.mediaPlayerState == VLCMediaPlayerStatePaused; } seconds:10]);
     __block NSDictionary *stableFrame = nil;
     __block NSDate *stableSince = nil;
-    XCTAssertTrue([self waitUntil:^BOOL {
+    BOOL settled = [self waitUntil:^BOOL {
         UIView *view = self.animeView;
         NSDictionary *metrics = service.anime4KRenderMetrics;
         unsigned long long latest = [[[view valueForKey:@"frames"] valueForKey:@"receivedFrameCount"] unsignedLongLongValue];
@@ -455,7 +455,8 @@
             return NO;
         }
         return -stableSince.timeIntervalSinceNow >= 0.5;
-    } seconds:60], @"A delivered paused High frame and presentation target must settle before measuring reuse: %@", service.anime4KRenderMetrics);
+    } seconds:60];
+    XCTAssertTrue(settled, @"A delivered paused High frame and presentation target must settle before measuring reuse: %@", service.anime4KRenderMetrics);
     UIView *baselineView = self.animeView;
     UIImage *before = self.captureVideo;
     NSDictionary *baseline = service.anime4KRenderMetrics;
