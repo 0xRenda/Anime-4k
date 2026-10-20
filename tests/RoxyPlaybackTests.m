@@ -428,24 +428,58 @@
     } seconds:15]);
     [service pause];
     XCTAssertTrue([self waitUntil:^BOOL { return service.mediaPlayerState == VLCMediaPlayerStatePaused; } seconds:10]);
+    __block NSDictionary *stableFrame = nil;
+    __block NSDate *stableSince = nil;
     XCTAssertTrue([self waitUntil:^BOOL {
+        UIView *view = self.animeView;
         NSDictionary *metrics = service.anime4KRenderMetrics;
-        unsigned long long latest = [[[self.animeView valueForKey:@"frames"] valueForKey:@"receivedFrameCount"] unsignedLongLongValue];
-        return [metrics[@"quality"] isEqual:@"high"] && [metrics[@"passes"] intValue] > 0 &&
-            [metrics[@"inputSequence"] unsignedLongLongValue] == latest;
-    } seconds:60], @"A delivered paused High frame must finish before testing presentation reuse: %@", service.anime4KRenderMetrics);
+        unsigned long long latest = [[[view valueForKey:@"frames"] valueForKey:@"receivedFrameCount"] unsignedLongLongValue];
+        if (service.mediaPlayerState != VLCMediaPlayerStatePaused || view.window == nil ||
+            ![metrics[@"quality"] isEqual:@"high"] || [metrics[@"passes"] intValue] == 0 ||
+            [metrics[@"inputSequence"] unsignedLongLongValue] != latest) {
+            stableSince = nil;
+            return NO;
+        }
+        // LibVLC's pause notification can precede its final vmem display, and
+        // pending video metadata can still resize the presentation target.
+        // Establish one settled input/target before measuring menu-only work.
+        NSDictionary *current = @{@"view": [NSValue valueWithNonretainedObject:view], @"sequence": @(latest),
+            @"cnnCount": [view valueForKey:@"cnnFrameCount"], @"bounds": NSStringFromCGRect(view.bounds),
+            @"aspectRatio": [view valueForKey:@"aspectRatio"], @"fillVideo": [view valueForKey:@"fillVideo"],
+            @"displayWidth": metrics[@"displayWidth"], @"displayHeight": metrics[@"displayHeight"],
+            @"engineRevision": metrics[@"engineRevision"], @"targetWidth": metrics[@"targetWidth"], @"targetHeight": metrics[@"targetHeight"],
+            @"outputWidth": metrics[@"outputWidth"], @"outputHeight": metrics[@"outputHeight"]};
+        if (stableSince == nil || ![current isEqual:stableFrame]) {
+            stableFrame = current;
+            stableSince = NSDate.date;
+            return NO;
+        }
+        return -stableSince.timeIntervalSinceNow >= 0.5;
+    } seconds:60], @"A delivered paused High frame and presentation target must settle before measuring reuse: %@", service.anime4KRenderMetrics);
+    UIView *baselineView = self.animeView;
     UIImage *before = self.captureVideo;
     NSDictionary *baseline = service.anime4KRenderMetrics;
     unsigned long long count = [[self.animeView valueForKey:@"cnnFrameCount"] unsignedLongLongValue];
+    NSLog(@"CACHE baseline view=%p frame=%@ metrics=%@", baselineView, stableFrame, baseline);
     XCTAssertGreaterThan(count, 0u);
+    XCTAssertEqual([baseline[@"inputSequence"] unsignedLongLongValue], [stableFrame[@"sequence"] unsignedLongLongValue]);
+    XCTAssertEqual(count, [stableFrame[@"cnnCount"] unsignedLongLongValue],
+                   @"Capturing an already settled enhanced frame must reuse its CNN output; settled=%@ capture=%@", stableFrame, baseline);
     XCTAssertEqual([baseline[@"cnnFrameCount"] unsignedLongLongValue], count);
     XCTAssertGreaterThan([baseline[@"sourceFPS"] doubleValue], 0);
 
     [defaults setBool:![defaults boolForKey:@"RoxyAnime4KShowStatus"] forKey:@"RoxyAnime4KShowStatus"];
     [defaults setObject:NSUUID.UUID.UUIDString forKey:@"RoxyValidationUnrelatedPreference"];
     UIImage *afterPreferences = self.captureVideo;
+    NSDictionary *afterMenu = service.anime4KRenderMetrics;
+    NSLog(@"CACHE preferences view=%p received=%@ metrics=%@", self.animeView,
+          [[self.animeView valueForKey:@"frames"] valueForKey:@"receivedFrameCount"], afterMenu);
+    XCTAssertEqual(self.animeView, baselineView, @"A presentation preference must retain the same renderer");
+    XCTAssertEqual([afterMenu[@"inputSequence"] unsignedLongLongValue], [baseline[@"inputSequence"] unsignedLongLongValue],
+                   @"The paused decoder delivered another frame after the settled baseline; baseline=%@ after=%@", baseline, afterMenu);
     XCTAssertEqual([[self.animeView valueForKey:@"cnnFrameCount"] unsignedLongLongValue], count,
-                   @"Status and unrelated menu preferences must not rerun a paused CNN");
+                   @"Status and unrelated menu preferences must not rerun a paused CNN; baseline=%@ after=%@ received=%@", baseline, afterMenu,
+                   [[self.animeView valueForKey:@"frames"] valueForKey:@"receivedFrameCount"]);
     XCTAssertEqualObjects(UIImagePNGRepresentation(afterPreferences), UIImagePNGRepresentation(before));
 
     [defaults setBool:YES forKey:@"RoxyAnime4KPreviewOriginal"];
@@ -458,8 +492,11 @@
     } seconds:10]);
     UIImage *restored = self.captureVideo;
     NSDictionary *final = service.anime4KRenderMetrics;
+    NSLog(@"CACHE restored view=%p received=%@ metrics=%@", self.animeView,
+          [[self.animeView valueForKey:@"frames"] valueForKey:@"receivedFrameCount"], final);
+    XCTAssertEqual(self.animeView, baselineView);
     XCTAssertEqual([[self.animeView valueForKey:@"cnnFrameCount"] unsignedLongLongValue], count,
-                   @"Returning from Original must reuse the exact enhanced paused frame");
+                   @"Returning from Original must reuse the exact enhanced paused frame; baseline=%@ after=%@", baseline, final);
     XCTAssertTrue([final[@"computationReused"] boolValue]);
     XCTAssertEqual([final[@"cnnFrameCount"] unsignedLongLongValue], count);
     XCTAssertEqual([final[@"inputSequence"] unsignedLongLongValue], [baseline[@"inputSequence"] unsignedLongLongValue]);

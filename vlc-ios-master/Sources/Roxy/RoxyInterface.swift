@@ -32,6 +32,7 @@ enum RoxyAppearance {
         navigation.navigationBar.prefersLargeTitles = false
         if let sheet = navigation.sheetPresentationController {
             sheet.detents = [.medium(), .large()]
+            sheet.selectedDetentIdentifier = .large
             sheet.prefersGrabberVisible = true
             sheet.preferredCornerRadius = 32
             sheet.prefersScrollingExpandsWhenScrolledToEdge = true

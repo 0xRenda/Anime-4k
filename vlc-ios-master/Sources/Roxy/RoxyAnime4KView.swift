@@ -121,6 +121,9 @@ final class RoxyAnime4KView: UIView, MTKViewDelegate {
     private var settings = RoxyRenderSettings()
     private var previewOriginal = UserDefaults.standard.bool(forKey: "RoxyAnime4KPreviewOriginal")
     private var engineRevision: UInt64 = 0
+    private var thermalLimit = ProcessInfo.processInfo.thermalState == .critical ? 2 :
+        (ProcessInfo.processInfo.thermalState == .serious ? 1 : 0)
+    private var lowPowerMode = ProcessInfo.processInfo.isLowPowerModeEnabled
     private var lastInputSequence: UInt64 = 0
     private var skippedFrames: UInt64 = 0
     private struct CachedFrame {
@@ -171,6 +174,10 @@ final class RoxyAnime4KView: UIView, MTKViewDelegate {
         metalView.colorPixelFormat = .bgra8Unorm
         metalView.clearColor = MTLClearColorMake(0, 0, 0, 1)
         metalView.framebufferOnly = true
+        // Layout below is the sole authority for Retina drawable dimensions.
+        // MTKView's automatic resize can otherwise replace them during a
+        // subsequent UIKit layout, unnecessarily rebuilding a paused CNN.
+        metalView.autoResizeDrawable = false
         metalView.preferredFramesPerSecond = 60
         metalView.delegate = self
         metalView.isUserInteractionEnabled = false
@@ -221,13 +228,16 @@ final class RoxyAnime4KView: UIView, MTKViewDelegate {
 
     override func layoutSubviews() {
         super.layoutSubviews()
-        metalView.frame = bounds
+        if metalView.frame != bounds { metalView.frame = bounds }
         // MTKView must target display PIXELS, including iPad Retina/external
         // screens. A point-sized target silently skips the upstream >1.2x hooks.
         let scale = window?.screen.scale ?? traitCollection.displayScale
-        metalView.contentScaleFactor = max(1, scale)
-        metalView.drawableSize = CGSize(width: bounds.width * max(1, scale), height: bounds.height * max(1, scale))
-        renderedSequence = UInt64.max
+        if metalView.contentScaleFactor != max(1, scale) { metalView.contentScaleFactor = max(1, scale) }
+        let size = CGSize(width: bounds.width * max(1, scale), height: bounds.height * max(1, scale))
+        if metalView.drawableSize != size {
+            metalView.drawableSize = size
+            renderedSequence = UInt64.max
+        }
         badge.frame = CGRect(x: safeAreaInsets.left + 16, y: safeAreaInsets.top + 116,
                              width: max(0, min(bounds.width - 20, 420)), height: 24)
     }
@@ -263,9 +273,15 @@ final class RoxyAnime4KView: UIView, MTKViewDelegate {
     @objc private func powerChanged() {
         // ProcessInfo notifications may originate on a non-UI thread.
         DispatchQueue.main.async { [weak self] in
-            self?.cachedFrame = nil
-            self?.engineRevision &+= 1
-            self?.renderedSequence = UInt64.max
+            guard let self = self else { return }
+            let process = ProcessInfo.processInfo
+            let limit = process.thermalState == .critical ? 2 : (process.thermalState == .serious ? 1 : 0)
+            guard self.thermalLimit != limit || self.lowPowerMode != process.isLowPowerModeEnabled else { return }
+            self.thermalLimit = limit
+            self.lowPowerMode = process.isLowPowerModeEnabled
+            self.cachedFrame = nil
+            self.engineRevision &+= 1
+            self.renderedSequence = UInt64.max
         }
     }
 
@@ -361,6 +377,13 @@ final class RoxyAnime4KView: UIView, MTKViewDelegate {
         let cached = cachedFrame.flatMap { value -> CachedFrame? in
             value.sequence == currentSequence && value.target == target && value.revision == revision ? value : nil
         }
+        let cacheMiss: String
+        if let value = cachedFrame {
+            if value.sequence != currentSequence { cacheMiss = "New decoded frame" }
+            else if value.target != target { cacheMiss = "Display size changed" }
+            else if value.revision != revision { cacheMiss = "Processing configuration changed" }
+            else { cacheMiss = "None" }
+        } else { cacheMiss = "No completed enhanced frame" }
         var filtered = source
         var status = "Original video"
         var quality = engine.selectedQuality
@@ -418,6 +441,8 @@ final class RoxyAnime4KView: UIView, MTKViewDelegate {
             "displayWidth": Int(view.drawableSize.width), "displayHeight": Int(view.drawableSize.height),
             "passes": passes, "upscaled": filtered.width > width && filtered.height > height,
             "inputSequence": currentSequence, "cnnFrameCount": cnnFrameCount, "computationReused": reused,
+            "engineRevision": revision, "targetWidth": target.x, "targetHeight": target.y, "cacheMissReason": cacheMiss,
+            "thermalLimit": thermalLimit, "lowPowerMode": lowPowerMode,
             "sourceFPS": 1.0 / frameInterval, "skippedFrames": skippedFrames]
         command.present(drawable)
         inFlight = true
