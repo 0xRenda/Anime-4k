@@ -441,8 +441,6 @@
 {
     UIWindow *window = [(VLCAppDelegate *)UIApplication.sharedApplication.delegate window];
     XCTAssertTrue([self waitUntil:^BOOL { return window.rootViewController.presentedViewController == nil; } seconds:10]);
-    [NSRunLoop.mainRunLoop runUntilDate:[NSDate dateWithTimeIntervalSinceNow:0.5]];
-    [self saveWindow:window name:@"roxy-library"];
     [NSUserDefaults.standardUserDefaults setBool:YES forKey:@"RoxyAnime4KEnabled"];
     [NSUserDefaults.standardUserDefaults setObject:@"low" forKey:@"RoxyAnime4KQuality"];
     NSURL *url = [[NSBundle bundleForClass:self.class] URLForResource:@"bars-8bit" withExtension:@"mkv"];
@@ -450,10 +448,16 @@
     [self assertPlaying:url];
     [VLCPlaybackService.sharedInstance.playerDisplayController showFullscreenPlayback];
     __block UIButton *button = nil;
-    XCTAssertTrue([self waitUntil:^BOOL {
+    BOOL foundButton = [self waitUntil:^BOOL {
         button = (UIButton *)[self findView:window identifier:@"roxy.anime4k.open"];
         return button.window != nil;
-    } seconds:10]);
+    } seconds:10];
+    if (!foundButton) [self saveWindow:window name:@"missing-player-controls"];
+    XCTAssertTrue(foundButton, @"root=%@ presented=%@ player=%@ playerWindow=%@ mode=%lu metrics=%@", window.rootViewController,
+      window.rootViewController.presentedViewController, VLCPlaybackService.sharedInstance.playerDisplayController.videoPlayerViewController,
+      VLCPlaybackService.sharedInstance.playerDisplayController.videoPlayerViewController.view.window,
+      (unsigned long)VLCPlaybackService.sharedInstance.playerDisplayController.displayMode,
+      VLCPlaybackService.sharedInstance.anime4KRenderMetrics);
     XCTAssertTrue([self waitUntil:^BOOL {
         UIViewController *player = window.rootViewController.presentedViewController;
         return player != nil && !player.isBeingPresented && !player.isBeingDismissed;
@@ -471,6 +475,10 @@
     UIViewController *controller = window.rootViewController;
     while (controller.presentedViewController) controller = controller.presentedViewController;
     [controller dismissViewControllerAnimated:NO completion:nil];
+    [self stopAndWait];
+    XCTAssertTrue([self waitUntil:^BOOL { return window.rootViewController.presentedViewController == nil; } seconds:10]);
+    [NSRunLoop.mainRunLoop runUntilDate:[NSDate dateWithTimeIntervalSinceNow:0.5]];
+    [self saveWindow:window name:@"roxy-library"];
 }
 
 - (UIView *)findView:(UIView *)root identifier:(NSString *)identifier
