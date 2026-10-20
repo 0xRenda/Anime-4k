@@ -218,6 +218,15 @@ class ActionSheet: UIViewController {
 
         backgroundView.accessibilityTraits = .allowsDirectInteraction
 
+#if os(iOS)
+        RoxyAppearance.glass(behind: mainStackView, radius: 30)
+        mainStackView.layer.cornerRadius = 30
+        mainStackView.clipsToBounds = true
+        collectionView.backgroundColor = .clear
+        collectionWrapperView.backgroundColor = .clear
+        headerView.backgroundColor = .clear
+        headerView.title.backgroundColor = .clear
+#endif
         setupMainStackViewConstraints()
         setupHeaderViewConstraints()
         setupCollectionWrapperView()
@@ -277,11 +286,11 @@ class ActionSheet: UIViewController {
 
     @objc func updateTheme() {
         let colors = themeColors
-        collectionView.backgroundColor = colors.background
-        collectionWrapperView.backgroundColor = colors.background
-        headerView.backgroundColor = colors.background
+        collectionView.backgroundColor = .clear
+        collectionWrapperView.backgroundColor = .clear
+        headerView.backgroundColor = .clear
         headerView.title.textColor = colors.cellTextColor
-        headerView.title.backgroundColor = colors.background
+        headerView.title.backgroundColor = .clear
         collectionView.layoutIfNeeded()
     }
     
@@ -331,9 +340,9 @@ private extension ActionSheet {
     private func setupMainStackViewConstraints() {
         NSLayoutConstraint.activate([
             // Extra padding for spring animation
-            mainStackView.leadingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.leadingAnchor),
-            mainStackView.trailingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.trailingAnchor),
-            mainStackView.widthAnchor.constraint(equalTo: view.safeAreaLayoutGuide.widthAnchor),
+            mainStackView.leadingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.leadingAnchor, constant: 12),
+            mainStackView.trailingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.trailingAnchor, constant: -12),
+            mainStackView.widthAnchor.constraint(equalTo: view.safeAreaLayoutGuide.widthAnchor, constant: -24),
             mainStackView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
         ])
     }
@@ -345,7 +354,7 @@ private extension ActionSheet {
     private func setHeaderRoundedCorners() {
         let roundedCornerPath = UIBezierPath(roundedRect: headerView.bounds,
                                              byRoundingCorners: [.topLeft, .topRight],
-                                             cornerRadii: CGSize(width: 10, height: 10))
+                                             cornerRadii: CGSize(width: 30, height: 30))
         let maskLayer = CAShapeLayer()
         maskLayer.path = roundedCornerPath.cgPath
         headerView.layer.mask = maskLayer

@@ -1627,6 +1627,8 @@
 		BAAF55D4607B825615B1CA0A /* RoxyAnime4KView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4D60CF663E8483FFD82B400 /* RoxyAnime4KView.swift */; };
 		FD494C5CADB7425C918E7AF6 /* RoxyVLCVideoOutput.m in Sources */ = {isa = PBXBuildFile; fileRef = BBA6C2EED952054A7BC87E49 /* RoxyVLCVideoOutput.m */; };
 		7BB04B14903D22B9207BDEC4 /* RoxyAnime4K in Resources */ = {isa = PBXBuildFile; fileRef = B2A4AE57CC75E99DA761ADA4 /* RoxyAnime4K */; };
+		56912821724577EB3EF4ACE9 /* RoxyInterface.swift in Sources */ = {isa = PBXBuildFile; fileRef = 17AA1CB21DADC2F7DE1489B7 /* RoxyInterface.swift */; };
+		F45CE60D18E8BDEF5D1183DE /* RoxyInterface.swift in Sources */ = {isa = PBXBuildFile; fileRef = 17AA1CB21DADC2F7DE1489B7 /* RoxyInterface.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -2777,6 +2779,7 @@
 		BBA6C2EED952054A7BC87E49 /* RoxyVLCVideoOutput.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = RoxyVLCVideoOutput.m; sourceTree = "<group>"; };
 		5BFC67A78E46465941159386 /* RoxyVLCVideoOutput.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = RoxyVLCVideoOutput.h; sourceTree = "<group>"; };
 		B2A4AE57CC75E99DA761ADA4 /* RoxyAnime4K */ = {isa = PBXFileReference; lastKnownFileType = folder; name = RoxyAnime4K; path = Resources/RoxyAnime4K; sourceTree = SOURCE_ROOT; };
+		17AA1CB21DADC2F7DE1489B7 /* RoxyInterface.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoxyInterface.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -5072,6 +5075,7 @@
 		0674A6060D64E09E774FAE26 /* Roxy */ = {isa = PBXGroup; children = (
 				E013FC31BA927B247F98A52D /* RoxyAnime4KEngine.swift */,
 				F4D60CF663E8483FFD82B400 /* RoxyAnime4KView.swift */,
+				17AA1CB21DADC2F7DE1489B7 /* RoxyInterface.swift */,
 				BBA6C2EED952054A7BC87E49 /* RoxyVLCVideoOutput.m */,
 				5BFC67A78E46465941159386 /* RoxyVLCVideoOutput.h */,
 			); path = Roxy; sourceTree = "<group>"; };
@@ -6485,6 +6489,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				56912821724577EB3EF4ACE9 /* RoxyInterface.swift in Sources */,
 				1EF199331F9931089BA99B22 /* RoxyVLCVideoOutput.m in Sources */,
 				BEAB364E5B78550B97B4A711 /* RoxyAnime4KView.swift in Sources */,
 				077AED2B165C32D36667568B /* RoxyAnime4KEngine.swift in Sources */,
@@ -6873,6 +6878,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				F45CE60D18E8BDEF5D1183DE /* RoxyInterface.swift in Sources */,
 				FD494C5CADB7425C918E7AF6 /* RoxyVLCVideoOutput.m in Sources */,
 				BAAF55D4607B825615B1CA0A /* RoxyAnime4KView.swift in Sources */,
 				F73DDB8695E3E32DCE93E8F2 /* RoxyAnime4KEngine.swift in Sources */,

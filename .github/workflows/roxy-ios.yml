@@ -108,6 +108,13 @@ jobs:
           name: Roxy-playback-tests-${{ matrix.quality }}
           path: build/playback-tests-*.xcresult
           if-no-files-found: ignore
+      - name: Upload rendered color and interface checks
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Roxy-rendered-validation-${{ matrix.quality }}
+          path: build/rendered-validation/*.png
+          if-no-files-found: ignore
       - name: Cache downloaded dependencies
         if: ${{ always() && !cancelled() && steps.dependencies.outputs.cache-primary-key != '' && steps.dependencies.outputs.cache-hit != 'true' }}
         uses: actions/cache/save@v4

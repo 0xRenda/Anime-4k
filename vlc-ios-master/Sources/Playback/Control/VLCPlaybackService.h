@@ -140,6 +140,8 @@ NS_SWIFT_NAME(PlaybackService)
 @property (nonatomic) NSMutableArray *openedLocalURLs;
 #if TARGET_OS_IOS
 @property (nonatomic) NSMutableArray *openedLocalFileAccesses;
+@property (nonatomic, readonly) NSDictionary<NSString *, id> *anime4KRenderMetrics;
+- (void)applyAnime4KSettings;
 #endif
 
 + (VLCPlaybackService *)sharedInstance;

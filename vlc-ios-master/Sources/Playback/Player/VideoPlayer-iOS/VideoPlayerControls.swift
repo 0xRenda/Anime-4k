@@ -79,6 +79,17 @@ class VideoPlayerControls: UIView {
     }
 
     func setupAccessibility() {
+#if os(iOS)
+        RoxyAppearance.glass(behind: self, radius: 28)
+        let symbols: [(UIButton, String)] = [(subtitleButton, "captions.bubble"), (backwardButton, "gobackward.10"),
+            (forwardButton, "goforward.10"), (previousMediaButton, "backward.end.fill"),
+            (nextMediaButton, "forward.end.fill"), (aspectRatioButton, "aspectratio"), (moreActionsButton, "ellipsis")]
+        for (button, symbol) in symbols {
+            button.setImage(UIImage(systemName: symbol), for: .normal)
+            button.tintColor = .white
+        }
+        playPauseButton.tintColor = RoxyAppearance.accent
+#endif
         subtitleButton.accessibilityLabel = NSLocalizedString("SUBTITLE_AND_TRACK_BUTTON",
                                                               comment: "")
         subtitleButton.accessibilityHint = NSLocalizedString("SUBTITLE_AND_TRACK_HINT",
@@ -171,8 +182,8 @@ class VideoPlayerControls: UIView {
     }
 
     func updatePlayPauseButton(toState isPlaying: Bool) {
-        let imageName = isPlaying ? "pause-circle" : "play-circle"
-        playPauseButton.setImage(UIImage(named: imageName), for: .normal)
+        let imageName = isPlaying ? "pause.circle.fill" : "play.circle.fill"
+        playPauseButton.setImage(UIImage(systemName: imageName), for: .normal)
     }
 
     func shouldEnableSeekButtons(_ enable: Bool) {

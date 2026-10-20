@@ -76,8 +76,10 @@ class AppearanceManager: NSObject {
 
     @objc class func navigationbarAppearance() -> UINavigationBarAppearance {
         let navBarAppearance = UINavigationBarAppearance()
-        navBarAppearance.configureWithOpaqueBackground()
-        navBarAppearance.backgroundColor = PresentationTheme.current.colors.navigationbarColor
+        navBarAppearance.configureWithDefaultBackground()
+        navBarAppearance.backgroundEffect = UIBlurEffect(style: .systemMaterial)
+        navBarAppearance.backgroundColor = PresentationTheme.current.colors.navigationbarColor.withAlphaComponent(0.25)
+        navBarAppearance.shadowColor = .clear
         navBarAppearance.titleTextAttributes = [.foregroundColor: PresentationTheme.current.colors.navigationbarTextColor]
         navBarAppearance.largeTitleTextAttributes = [.foregroundColor: PresentationTheme.current.colors.navigationbarTextColor]
         return navBarAppearance

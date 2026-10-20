@@ -163,7 +163,7 @@ class ProjectTests(unittest.TestCase):
             block = configure.object_block(project, target)
             phase = re.search(r'([A-F0-9]{24}) /\* Sources \*/', block)[1]
             contents = configure.object_block(project, phase)
-            for name in ('RoxyAnime4KEngine.swift', 'RoxyAnime4KView.swift', 'RoxyVLCVideoOutput.m'):
+            for name in ('RoxyAnime4KEngine.swift', 'RoxyAnime4KView.swift', 'RoxyInterface.swift', 'RoxyVLCVideoOutput.m'):
                 self.assertIn(name, contents)
 
 

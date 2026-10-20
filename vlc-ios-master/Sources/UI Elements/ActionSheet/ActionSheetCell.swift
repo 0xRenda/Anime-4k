@@ -110,7 +110,7 @@ class DoubleActionSheetCell: UICollectionViewCell {
         let name = UILabel()
         let colors = PresentationTheme.current.colors
         name.textColor = colors.cellTextColor
-        name.backgroundColor = colors.background
+        name.backgroundColor = colors.background.withAlphaComponent(0.12)
         name.font = UIFont.preferredCustomFont(forTextStyle: .subheadline)
         name.translatesAutoresizingMaskIntoConstraints = false
         return name
@@ -137,7 +137,7 @@ class DoubleActionSheetCell: UICollectionViewCell {
         let rightName = UILabel()
         let colors = PresentationTheme.current.colors
         rightName.textColor = colors.cellTextColor
-        rightName.backgroundColor = colors.background
+        rightName.backgroundColor = colors.background.withAlphaComponent(0.12)
         rightName.font = UIFont.preferredCustomFont(forTextStyle: .subheadline)
         rightName.translatesAutoresizingMaskIntoConstraints = false
         return rightName
@@ -216,12 +216,12 @@ class DoubleActionSheetCell: UICollectionViewCell {
     }
     @objc private func updateTheme() {
         let colors = getThemeColors()
-        backgroundColor = colors.background
+        backgroundColor = colors.background.withAlphaComponent(0.12)
         leftName.backgroundColor = backgroundColor
         rightName.backgroundColor = backgroundColor
-        mainStackView.backgroundColor = colors.background
-        rightStackView.backgroundColor = colors.background
-        leftStackView.backgroundColor = colors.background
+        mainStackView.backgroundColor = colors.background.withAlphaComponent(0.12)
+        rightStackView.backgroundColor = colors.background.withAlphaComponent(0.12)
+        leftStackView.backgroundColor = colors.background.withAlphaComponent(0.12)
     }
 
     private func setupConstraints() {
@@ -291,7 +291,7 @@ class ActionSheetCell: UICollectionViewCell {
         let name = UILabel()
         let colors = PresentationTheme.current.colors
         name.textColor = colors.cellTextColor
-        name.backgroundColor = colors.background
+        name.backgroundColor = colors.background.withAlphaComponent(0.12)
         name.font = UIFont.preferredCustomFont(forTextStyle: .subheadline)
         name.lineBreakMode = .byTruncatingTail
         name.setContentHuggingPriority(.defaultLow, for: .horizontal)
@@ -387,7 +387,7 @@ class ActionSheetCell: UICollectionViewCell {
             accessoryView.tintColor = isSelected && accessoryType == .checkmark ? colors.orangeUI : colors.cellDetailTextColor
         }
 
-        viewToPresent?.backgroundColor = colors.background
+        viewToPresent?.backgroundColor = colors.background.withAlphaComponent(0.12)
     }
 
     @objc private func switchToggled(_ sender: UISwitch) {
@@ -445,9 +445,9 @@ class ActionSheetCell: UICollectionViewCell {
         name.text = title
         name.textColor = isSelected ? colors.orangeUI : colors.cellTextColor
 
-        backgroundColor = colors.background
-        name.backgroundColor = colors.background
-        stackView.backgroundColor = colors.background
+        backgroundColor = colors.background.withAlphaComponent(0.12)
+        name.backgroundColor = colors.background.withAlphaComponent(0.12)
+        stackView.backgroundColor = colors.background.withAlphaComponent(0.12)
     }
 
     func setToggleSwitch(state: Bool) {

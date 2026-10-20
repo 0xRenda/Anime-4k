@@ -36,8 +36,8 @@ group = project.main_group.find_subpath('Roxy playback tests', true)
 source = File.join(root, 'tests/RoxyPlaybackTests.m')
 reference = group.files.find { |file| file.path == source } || group.new_file(source)
 tests.source_build_phase.add_file_reference(reference, true)
-%w[mkv mp4].each do |extension|
-  path = File.join(root, 'tests/fixtures/shared.' + extension)
+%w[shared.mkv shared.mp4 bars-8bit.mkv bars-10bit.mkv].each do |name|
+  path = File.join(root, 'tests/fixtures/' + name)
   reference = group.files.find { |file| file.path == path } || group.new_file(path)
   tests.resources_build_phase.add_file_reference(reference, true)
 end

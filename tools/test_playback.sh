@@ -36,3 +36,6 @@ xcrun simctl bootstatus "$SIMULATOR_ID" -b
 xcodebuild test-without-building "${TEST_ARGS[@]}" \
   -resultBundlePath "$ROOT/build/playback-tests-$ROXY_QUALITY.xcresult" \
   2>&1 | tee "build/playback-tests-$ROXY_QUALITY.log"
+APP_DATA="$(xcrun simctl get_app_container "$SIMULATOR_ID" "${ROXY_BUNDLE_ID:-com.roxy.player}" data)"
+mkdir -p build/rendered-validation
+cp "$APP_DATA/Library/Caches/RoxyValidation/"*.png build/rendered-validation/

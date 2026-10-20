@@ -60,6 +60,9 @@ final class RoxyAnime4KView: UIView, MTKViewDelegate {
     private var previousArrival: CFTimeInterval = 0
     private let badge = UILabel()
     private var settingsObserver: NSObjectProtocol?
+    private var captureCompletion: ((UIImage?) -> Void)?
+    @objc private(set) var renderMetrics: [String: Any] = ["status": "Waiting for video"]
+    @objc private(set) var renderedFrameCount: UInt64 = 0
     @objc var fillVideo = false { didSet { renderedSequence = UInt64.max } }
     @objc var aspectRatio: Double = 0 { didSet { renderedSequence = UInt64.max } }
 
@@ -129,13 +132,19 @@ final class RoxyAnime4KView: UIView, MTKViewDelegate {
     override func layoutSubviews() {
         super.layoutSubviews()
         metalView.frame = bounds
+        // MTKView must target display PIXELS, including iPad Retina/external
+        // screens. A point-sized target silently skips the upstream >1.2x hooks.
+        let scale = window?.screen.scale ?? traitCollection.displayScale
+        metalView.contentScaleFactor = max(1, scale)
+        metalView.drawableSize = CGSize(width: bounds.width * max(1, scale), height: bounds.height * max(1, scale))
         renderedSequence = UInt64.max
-        badge.frame = CGRect(x: safeAreaInsets.left + 10, y: safeAreaInsets.top + 10,
+        badge.frame = CGRect(x: safeAreaInsets.left + 16, y: safeAreaInsets.top + 116,
                              width: max(0, min(bounds.width - 20, 420)), height: 24)
     }
 
     override func didMoveToWindow() {
         super.didMoveToWindow()
+        setNeedsLayout()
         metalView.isPaused = window == nil || !active
         frames.setActive(window != nil && active)
     }
@@ -160,9 +169,48 @@ final class RoxyAnime4KView: UIView, MTKViewDelegate {
 
     func mtkView(_ view: MTKView, drawableSizeWillChange size: CGSize) { renderedSequence = UInt64.max }
 
+    // Used by image validation and frame export. Render the SAME presentation
+    // pipeline to a readable target without changing the fast drawable surface.
+    @objc(captureNextFrame:)
+    func captureNextFrame(_ completion: @escaping (UIImage?) -> Void) {
+        captureCompletion?(nil)
+        captureCompletion = completion
+        renderedSequence = UInt64.max
+    }
+
+    private func present(_ texture: MTLTexture, scale: SIMD2<Float>, pass: MTLRenderPassDescriptor,
+                         command: MTLCommandBuffer) -> Bool {
+        guard let encoder = command.makeRenderCommandEncoder(descriptor: pass) else { return false }
+        var scale = scale
+        encoder.setRenderPipelineState(blitPipeline)
+        encoder.setVertexBytes(&scale, length: MemoryLayout<SIMD2<Float>>.size, index: 0)
+        encoder.setFragmentTexture(texture, index: 0)
+        encoder.drawPrimitives(type: .triangleStrip, vertexStart: 0, vertexCount: 4)
+        encoder.endEncoding()
+        return true
+    }
+
+    private static func image(from texture: MTLTexture) -> UIImage? {
+        let rowBytes = texture.width * 4
+        var bytes = Data(count: rowBytes * texture.height)
+        bytes.withUnsafeMutableBytes { raw in
+            texture.getBytes(raw.baseAddress!, bytesPerRow: rowBytes,
+                             from: MTLRegionMake2D(0, 0, texture.width, texture.height), mipmapLevel: 0)
+        }
+        guard let provider = CGDataProvider(data: bytes as CFData),
+              let image = CGImage(width: texture.width, height: texture.height, bitsPerComponent: 8,
+                bitsPerPixel: 32, bytesPerRow: rowBytes, space: CGColorSpaceCreateDeviceRGB(),
+                bitmapInfo: CGBitmapInfo(rawValue: CGBitmapInfo.byteOrder32Little.rawValue | CGImageAlphaInfo.premultipliedFirst.rawValue),
+                provider: provider, decode: nil, shouldInterpolate: false, intent: .defaultIntent) else { return nil }
+        return UIImage(cgImage: image)
+    }
+
     func draw(in view: MTKView) {
         badge.isHidden = !UserDefaults.standard.bool(forKey: "RoxyAnime4KShowStatus")
-        badge.text = "  " + engine.status
+        if let width = renderMetrics["inputWidth"], let output = renderMetrics["outputWidth"] {
+            let time = (renderMetrics["gpuMilliseconds"] as? Double) ?? 0
+            badge.text = "  \(engine.status) · \(width) → \(output) · \(String(format: "%.1f", time)) ms"
+        } else { badge.text = "  " + engine.status }
         guard active, !inFlight, view.drawableSize.width > 0, view.drawableSize.height > 0 else { return }
         let (frame, currentSequence) = frames.snapshot()
         guard let pixelBuffer = frame, currentSequence != renderedSequence, let cache = textureCache else { return }
@@ -192,24 +240,44 @@ final class RoxyAnime4KView: UIView, MTKViewDelegate {
             filtered = source
             badge.text = "  Anime4K: " + error.localizedDescription
         }
-        guard let encoder = command.makeRenderCommandEncoder(descriptor: renderPass) else { return }
-        encoder.setRenderPipelineState(blitPipeline)
-        encoder.setVertexBytes(&scale, length: MemoryLayout<SIMD2<Float>>.size, index: 0)
-        encoder.setFragmentTexture(filtered, index: 0)
-        encoder.drawPrimitives(type: .triangleStrip, vertexStart: 0, vertexCount: 4)
-        encoder.endEncoding()
+        guard present(filtered, scale: scale, pass: renderPass, command: command) else { return }
+        let capture = captureCompletion
+        captureCompletion = nil
+        var captureTexture: MTLTexture?
+        if capture != nil {
+            let descriptor = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: .bgra8Unorm,
+                width: drawable.texture.width, height: drawable.texture.height, mipmapped: false)
+            descriptor.storageMode = .shared
+            descriptor.usage = .renderTarget
+            if let texture = metalView.device?.makeTexture(descriptor: descriptor) {
+                let pass = MTLRenderPassDescriptor()
+                pass.colorAttachments[0].texture = texture
+                pass.colorAttachments[0].loadAction = .clear
+                pass.colorAttachments[0].storeAction = .store
+                pass.colorAttachments[0].clearColor = MTLClearColorMake(0, 0, 0, 1)
+                if present(filtered, scale: scale, pass: pass, command: command) { captureTexture = texture }
+            }
+        }
+        let metrics: [String: Any] = ["status": engine.status, "quality": engine.selectedQuality,
+            "inputWidth": width, "inputHeight": height, "outputWidth": filtered.width, "outputHeight": filtered.height,
+            "displayWidth": Int(view.drawableSize.width), "displayHeight": Int(view.drawableSize.height),
+            "passes": engine.encodedPassCount, "upscaled": filtered.width > width && filtered.height > height]
         command.present(drawable)
         inFlight = true
         renderedSequence = currentSequence
         let budget = frameInterval
-        command.addCompletedHandler { [weak self, pixelBuffer, image] buffer in
+        command.addCompletedHandler { [weak self, pixelBuffer, image, captureTexture] buffer in
             // Retain the CVPixelBuffer AND CVMetalTexture until GPU completion.
             _ = pixelBuffer
             _ = image
             let duration = buffer.gpuEndTime - buffer.gpuStartTime
+            let snapshot = buffer.status == .completed ? captureTexture.flatMap { Self.image(from: $0) } : nil
             DispatchQueue.main.async {
                 guard let self = self else { return }
                 self.inFlight = false
+                self.renderedFrameCount &+= 1
+                self.renderMetrics = metrics.merging(["gpuMilliseconds": duration * 1000]) { _, new in new }
+                capture?(snapshot)
                 if buffer.status == .error {
                     self.badge.text = "  Metal error; select a lower Anime4K quality"
                     self.engine.resetMemory()

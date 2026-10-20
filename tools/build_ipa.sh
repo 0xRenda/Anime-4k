@@ -31,7 +31,7 @@ from pathlib import Path
 path = Path('vlc-ios-master/Resources/iOS/Info.plist')
 data = plistlib.loads(path.read_bytes())
 data['RoxyDefaultAnime4KQuality'] = os.environ['ROXY_QUALITY']
-data['CFBundleShortVersionString'] = '4.0.1'
+data['CFBundleShortVersionString'] = '4.0.2'
 data['CFBundleVersion'] = str(1000 + int(os.environ.get('GITHUB_RUN_NUMBER', '0')))
 data['RoxyGitCommit'] = os.environ.get('GITHUB_SHA', 'local')
 path.write_bytes(plistlib.dumps(data, sort_keys=False))

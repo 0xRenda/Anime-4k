@@ -39,6 +39,14 @@ class BottomTabBarController: UITabBarController {
     override func viewDidLoad() {
         super.viewDidLoad()
 
+        let appearance = UITabBarAppearance()
+        appearance.configureWithDefaultBackground()
+        appearance.backgroundEffect = UIBlurEffect(style: .systemMaterial)
+        appearance.shadowColor = .clear
+        tabBar.standardAppearance = appearance
+        tabBar.scrollEdgeAppearance = appearance
+        tabBar.tintColor = RoxyAppearance.accent
+
         guard isBottomBarActive else {
             return
         }

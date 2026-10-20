@@ -14,6 +14,9 @@
 @protocol RoxyFilePreparer <NSObject>
 + (void)prepareURLs:(NSArray<NSURL *> *)urls completion:(void (^)(NSArray<id<RoxyFileAccess>> *, NSError *))completion;
 @end
+@protocol RoxyFrameCapture <NSObject>
+- (void)captureNextFrame:(void (^)(UIImage *))completion;
+@end
 
 @interface RoxyPlaybackTests : XCTestCase
 @property (nonatomic) NSMutableArray<NSURL *> *cleanupURLs;
@@ -33,6 +36,8 @@
         return [(VLCAppDelegate *)UIApplication.sharedApplication.delegate window].isKeyWindow;
     } seconds:10], @"The app scene did not become ready");
     [NSUserDefaults.standardUserDefaults setBool:NO forKey:@"RoxyAnime4KEnabled"];
+    [NSUserDefaults.standardUserDefaults setBool:NO forKey:@"RoxyAnime4KPreviewOriginal"];
+    [NSUserDefaults.standardUserDefaults setObject:@"preset" forKey:@"RoxyAnime4KShader"];
     [NSUserDefaults.standardUserDefaults setInteger:0 forKey:@"ContinuePlayback"];
     [self stopAndWait];
 }
@@ -288,6 +293,169 @@
         UIViewController *player = root.presentedViewController;
         return player.view.window != nil && !player.isBeingDismissed && !player.isBeingPresented;
     } seconds:5], @"Decoded video stayed behind the library after a rapid reopen");
+}
+
+- (UIView<RoxyFrameCapture> *)animeView
+{
+    return [[VLCPlaybackService.sharedInstance valueForKey:@"roxyVideoOutput"] valueForKey:@"view"];
+}
+
+- (void)saveImage:(UIImage *)image name:(NSString *)name
+{
+    XCTAssertNotNil(image);
+    XCTAttachment *attachment = [XCTAttachment attachmentWithImage:image];
+    attachment.name = name;
+    attachment.lifetime = XCTAttachmentLifetimeKeepAlways;
+    [self addAttachment:attachment];
+    NSURL *folder = [[NSFileManager.defaultManager URLsForDirectory:NSCachesDirectory inDomains:NSUserDomainMask].firstObject URLByAppendingPathComponent:@"RoxyValidation"];
+    [NSFileManager.defaultManager createDirectoryAtURL:folder withIntermediateDirectories:YES attributes:nil error:nil];
+    [UIImagePNGRepresentation(image) writeToURL:[folder URLByAppendingPathComponent:[name stringByAppendingPathExtension:@"png"]] atomically:YES];
+}
+
+- (UIImage *)captureVideo
+{
+    __block UIImage *image = nil;
+    XCTestExpectation *ready = [self expectationWithDescription:@"Read actual Metal presentation pixels"];
+    [self.animeView captureNextFrame:^(UIImage *value) { image = value; [ready fulfill]; }];
+    [self waitForExpectationsWithTimeout:30 handler:nil];
+    XCTAssertNotNil(image);
+    return image;
+}
+
+- (void)assertColorBars:(UIImage *)image name:(NSString *)name
+{
+    CGImageRef source = image.CGImage;
+    size_t width = CGImageGetWidth(source), height = CGImageGetHeight(source);
+    NSMutableData *bytes = [NSMutableData dataWithLength:width * height * 4];
+    CGColorSpaceRef space = CGColorSpaceCreateDeviceRGB();
+    CGContextRef context = CGBitmapContextCreate(bytes.mutableBytes, width, height, 8, width * 4, space,
+                                                 kCGImageAlphaPremultipliedLast | kCGBitmapByteOrder32Big);
+    XCTAssertNotEqual(context, NULL);
+    CGContextDrawImage(context, CGRectMake(0, 0, width, height), source);
+    CGContextRelease(context);
+    CGColorSpaceRelease(space);
+    const int expected[8][3] = {{220,20,20},{20,220,20},{20,20,220},{128,128,128},
+                               {220,220,220},{20,20,20},{20,220,220},{220,220,20}};
+    // The production renderer aspect-fits a 16:9 video; exclude letterboxing.
+    double videoWidth = MIN((double)width, height * 16.0 / 9.0);
+    double left = (width - videoWidth) / 2.0;
+    const uint8_t *pixels = bytes.bytes;
+    for (int bar = 0; bar < 8; bar++) {
+        size_t x = (size_t)(left + videoWidth * (bar + 0.5) / 8.0);
+        const uint8_t *pixel = pixels + ((height / 2) * width + x) * 4;
+        NSLog(@"COLOR %@ bar=%d RGB=%d,%d,%d", name, bar, pixel[0], pixel[1], pixel[2]);
+        for (int channel = 0; channel < 3; channel++) {
+            XCTAssertLessThan(abs((int)pixel[channel] - expected[bar][channel]), 40,
+                @"%@ color channel %d is wrong in bar %d", name, channel, bar);
+        }
+        if (bar == 3 || bar == 4) {
+            XCTAssertLessThan(abs((int)pixel[0] - pixel[2]), 6, @"Neutral colors must not turn purple");
+        }
+    }
+    [self saveImage:image name:name];
+}
+
+- (void)validateRenderedFixture:(NSString *)name
+{
+    NSUserDefaults *defaults = NSUserDefaults.standardUserDefaults;
+    [defaults setBool:YES forKey:@"RoxyAnime4KEnabled"];
+    [defaults setObject:@"low" forKey:@"RoxyAnime4KQuality"];
+    NSURL *url = [[NSBundle bundleForClass:self.class] URLForResource:name withExtension:@"mkv"];
+    XCTAssertNotNil(url);
+    [UIApplication.sharedApplication.delegate application:UIApplication.sharedApplication openURL:url options:@{}];
+    [self assertPlaying:url];
+    VLCPlaybackService *service = VLCPlaybackService.sharedInstance;
+    [service pause];
+    for (NSString *quality in @[@"low", @"medium", @"high"]) {
+        [defaults setObject:quality forKey:@"RoxyAnime4KQuality"];
+        XCTAssertTrue([self waitUntil:^BOOL {
+            NSDictionary *metrics = service.anime4KRenderMetrics;
+            return [metrics[@"passes"] intValue] > 0 && [metrics[@"quality"] isEqual:quality];
+        } seconds:60], @"%@ failed to run %@: %@", name, quality, service.anime4KRenderMetrics);
+        NSDictionary *metrics = service.anime4KRenderMetrics;
+        XCTAssertEqual([metrics[@"inputWidth"] intValue], 128);
+        XCTAssertEqual([metrics[@"outputWidth"] intValue], 256, @"The CNN must actually double the resolution");
+        XCTAssertEqual([metrics[@"outputHeight"] intValue], 144);
+        CGFloat scale = self.animeView.window.screen.scale;
+        XCTAssertEqualWithAccuracy([metrics[@"displayWidth"] doubleValue], self.animeView.bounds.size.width * scale, 1);
+        [self assertColorBars:self.captureVideo name:[NSString stringWithFormat:@"%@-%@", name, quality]];
+    }
+    [defaults setBool:YES forKey:@"RoxyAnime4KPreviewOriginal"];
+    XCTAssertTrue([self waitUntil:^BOOL { return [service.anime4KRenderMetrics[@"passes"] intValue] == 0; } seconds:10]);
+    XCTAssertEqual([service.anime4KRenderMetrics[@"outputWidth"] intValue], 128);
+    [self assertColorBars:self.captureVideo name:[name stringByAppendingString:@"-original"]];
+    [defaults setBool:NO forKey:@"RoxyAnime4KPreviewOriginal"];
+}
+
+- (void)testRendered8BitColorsAndAllThreeUpscalingPresets { [self validateRenderedFixture:@"bars-8bit"]; }
+- (void)testRendered10BitColorsAndAllThreeUpscalingPresets { [self validateRenderedFixture:@"bars-10bit"]; }
+
+- (void)testEnablingAnime4KPreservesPausedMediaAndFileLease
+{
+    NSURL *url = [self copyFixture:@"mkv" into:self.testDirectory name:@"enable live.mkv"];
+    VLCPlaybackService *service = VLCPlaybackService.sharedInstance;
+    VLCMediaList *list = [VLCMediaList new];
+    [list addMedia:[VLCMedia mediaWithURL:url]];
+    __block int completions = 0;
+    [service playMediaList:list firstIndex:0 subtitlesFilePath:nil completion:^(BOOL success) { completions++; }];
+    [self assertPlaying:url];
+    service.playbackPosition = 2;
+    [service pause];
+    XCTAssertTrue([self waitUntil:^BOOL { return service.mediaPlayerState == VLCMediaPlayerStatePaused; } seconds:10]);
+    float position = service.playbackPosition;
+    [NSUserDefaults.standardUserDefaults setBool:YES forKey:@"RoxyAnime4KEnabled"];
+    [NSUserDefaults.standardUserDefaults setObject:@"low" forKey:@"RoxyAnime4KQuality"];
+    [service applyAnime4KSettings];
+    XCTAssertTrue([self waitUntil:^BOOL {
+        return service.mediaPlayerState == VLCMediaPlayerStatePaused && [service.anime4KRenderMetrics[@"passes"] intValue] > 0;
+    } seconds:60]);
+    XCTAssertEqualObjects(service.currentlyPlayingMedia.url, url);
+    XCTAssertEqualWithAccuracy(service.playbackPosition, position, 0.75);
+    XCTAssertEqual(completions, 0, @"Changing the renderer must not finish the caller's file access");
+    [self stopAndWait];
+    XCTAssertEqual(completions, 1);
+}
+
+- (void)testVisibleAnime4KButtonOpensGlassSettings
+{
+    [NSUserDefaults.standardUserDefaults setBool:YES forKey:@"RoxyAnime4KEnabled"];
+    [NSUserDefaults.standardUserDefaults setObject:@"low" forKey:@"RoxyAnime4KQuality"];
+    NSURL *url = [[NSBundle bundleForClass:self.class] URLForResource:@"bars-8bit" withExtension:@"mkv"];
+    [UIApplication.sharedApplication.delegate application:UIApplication.sharedApplication openURL:url options:@{}];
+    [self assertPlaying:url];
+    UIWindow *window = [(VLCAppDelegate *)UIApplication.sharedApplication.delegate window];
+    __block UIButton *button = nil;
+    XCTAssertTrue([self waitUntil:^BOOL {
+        button = (UIButton *)[self findView:window identifier:@"roxy.anime4k.open"];
+        return button.window != nil && button.alpha > 0;
+    } seconds:10]);
+    [self saveWindow:window name:@"player-glass"];
+    [button sendActionsForControlEvents:UIControlEventTouchUpInside];
+    XCTAssertTrue([self waitUntil:^BOOL { return [self findView:window identifier:@"roxy.anime4k.quality"] != nil; } seconds:10]);
+    [NSRunLoop.mainRunLoop runUntilDate:[NSDate dateWithTimeIntervalSinceNow:0.7]];
+    [self saveWindow:window name:@"anime4k-glass-menu"];
+    UIViewController *controller = window.rootViewController;
+    while (controller.presentedViewController) controller = controller.presentedViewController;
+    [controller dismissViewControllerAnimated:NO completion:nil];
+}
+
+- (UIView *)findView:(UIView *)root identifier:(NSString *)identifier
+{
+    if ([root.accessibilityIdentifier isEqual:identifier]) return root;
+    for (UIView *child in root.subviews) {
+        UIView *found = [self findView:child identifier:identifier];
+        if (found) return found;
+    }
+    return nil;
+}
+
+- (void)saveWindow:(UIWindow *)window name:(NSString *)name
+{
+    UIGraphicsImageRenderer *renderer = [[UIGraphicsImageRenderer alloc] initWithSize:window.bounds.size];
+    UIImage *image = [renderer imageWithActions:^(UIGraphicsImageRendererContext *context) {
+        [window drawViewHierarchyInRect:window.bounds afterScreenUpdates:YES];
+    }];
+    [self saveImage:image name:name];
 }
 
 @end

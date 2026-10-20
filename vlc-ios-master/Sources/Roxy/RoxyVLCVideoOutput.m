@@ -93,8 +93,9 @@ static unsigned RoxySetup(void **opaque, char *chroma, unsigned *width, unsigned
         CVPixelBufferPoolRef pool = NULL;
         if (CVPixelBufferPoolCreate(kCFAllocatorDefault, NULL, (__bridge CFDictionaryRef)attributes, &pool) != kCVReturnSuccess) return 0;
         format.pool = pool;
-        // RV32 is BGRX on little-endian arm64; presentation forces alpha to 1.
-        memcpy(chroma, "RV32", 4);
+        // VLC 4 defines RV32 as XRGB in MEMORY order, not endian-dependent
+        // BGRX. CoreVideo and Metal both require explicit BGRA here.
+        memcpy(chroma, "BGRA", 4);
         pitches[0] = (unsigned)pitch;
         lines[0] = (unsigned)alignedLines;
         *opaque = (__bridge_retained void *)format;

@@ -52,7 +52,7 @@ class SettingsController: UITableViewController {
 
     @objc init(mediaLibraryService: MediaLibraryService) {
         self.mediaLibraryService = mediaLibraryService
-        super.init(style: .grouped)
+        super.init(style: .insetGrouped)
         self.mediaLibraryService.deviceBackupDelegate = self
         setupTabBarItem()
     }
@@ -69,7 +69,32 @@ class SettingsController: UITableViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         setup()
+#if os(iOS)
+        let header = UIView(frame: CGRect(x: 0, y: 0, width: tableView.bounds.width, height: 146))
+        let button = UIButton(type: .system)
+        var configuration = UIButton.Configuration.filled()
+        configuration.title = "Anime4K"
+        configuration.subtitle = "Quality · Live comparison · Performance"
+        configuration.image = UIImage(systemName: "sparkles")
+        configuration.imagePadding = 16
+        configuration.titleAlignment = .leading
+        configuration.baseBackgroundColor = RoxyAppearance.accent.withAlphaComponent(0.12)
+        configuration.baseForegroundColor = RoxyAppearance.accent
+        configuration.cornerStyle = .large
+        configuration.contentInsets = NSDirectionalEdgeInsets(top: 24, leading: 20, bottom: 24, trailing: 20)
+        button.configuration = configuration
+        button.frame = header.bounds.insetBy(dx: 20, dy: 16)
+        button.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        button.accessibilityIdentifier = "roxy.anime4k.settings"
+        button.addTarget(self, action: #selector(openAnime4K), for: .touchUpInside)
+        header.addSubview(button)
+        tableView.tableHeaderView = header
+#endif
     }
+
+#if os(iOS)
+    @objc private func openAnime4K() { RoxyAppearance.presentSettings(from: self) }
+#endif
 
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)

@@ -117,6 +117,8 @@ final class RoxyAnime4KEngine {
     private var expensiveFrames = 0
     var onChange: (() -> Void)?
     private(set) var status = "Preparing Anime4K"
+    private(set) var encodedPassCount = 0
+    var selectedQuality: String { activeQuality.name }
 
     init(device: MTLDevice, root: URL) throws {
         self.device = device
@@ -202,14 +204,21 @@ final class RoxyAnime4KEngine {
     }
 
     func encode(input: MTLTexture, outputSize: SIMD2<Int>, commandBuffer: MTLCommandBuffer) throws -> MTLTexture {
+        encodedPassCount = 0
         let defaults = UserDefaults.standard
-        if (defaults.object(forKey: "RoxyAnime4KEnabled") as? Bool) == false {
+        if (defaults.object(forKey: "RoxyAnime4KEnabled") as? Bool) == false || defaults.bool(forKey: "RoxyAnime4KPreviewOriginal") {
             status = "Anime4K off"
             return input
         }
         if ProcessInfo.processInfo.thermalState == .critical {
             status = "Anime4K paused: device temperature"
             resetMemory()
+            return input
+        }
+        if (defaults.string(forKey: "RoxyAnime4KQuality") ?? "automatic") == "automatic",
+           (defaults.string(forKey: "RoxyAnime4KShader") ?? "preset") == "preset",
+           outputSize.x <= input.width && outputSize.y <= input.height {
+            status = "Native resolution"
             return input
         }
         let quality = requestedQuality()
@@ -227,7 +236,10 @@ final class RoxyAnime4KEngine {
             return input
         }
         let key = "\(names.joined(separator: ",")):\(input.width)x\(input.height):\(outputSize):\(quality.rawValue)"
-        if rejectedPlans.contains(key) { return input }
+        if rejectedPlans.contains(key) {
+            status = "Anime4K: memory limit — original video"
+            return input
+        }
         if key != planKey {
             resetMemory()
             do {
@@ -266,6 +278,7 @@ final class RoxyAnime4KEngine {
             versions[operation.output] = destination
         }
         status = "Anime4K \(custom == "preset" ? quality.name.capitalized : custom)"
+        encodedPassCount = operations.count
         return versions[finalVersion] ?? input
     }
 

@@ -46,11 +46,14 @@ def add_to_list(text, uuid, field, line):
 def main():
     text = PROJECT.read_text(encoding="utf-8")
     files = {"RoxyAnime4KEngine.swift": "sourcecode.swift", "RoxyAnime4KView.swift": "sourcecode.swift",
+             "RoxyInterface.swift": "sourcecode.swift",
              "RoxyVLCVideoOutput.m": "sourcecode.c.objc", "RoxyVLCVideoOutput.h": "sourcecode.c.h"}
     group = identifier("group")
     group_line = f'\t\t{group} /* Roxy */ = {{isa = PBXGroup; children = (\n' + "".join(
         f"\t\t\t\t{identifier(name)} /* {name} */,\n" for name in files) + '\t\t\t); path = Roxy; sourceTree = "<group>"; };'
     text = insert_section(text, "PBXGroup", group_line)
+    # Refresh the existing group as the integration gains new source files.
+    text = re.sub(r"\t\t" + group + r" /\* Roxy \*/ = \{.*?\};", lambda _: group_line, text, count=1, flags=re.S)
     text = add_to_list(text, "7DC7BA6C28C892EA00109F28", "children", f"{group} /* Roxy */,")
     for name, kind in files.items():
         text = insert_section(text, "PBXFileReference",

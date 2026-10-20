@@ -62,6 +62,23 @@ NSString *const VLCLastPlaylistPlayedMedia = @"LastPlaylistPlayedMedia";
 static const float kVLCPlaybackRateMinimum = 0.25f;
 static const float kVLCPlaybackRateMaximum = 8.0f;
 
+#if TARGET_OS_IOS
+// A renderer restart has two asynchronous owners of the same file grants.
+// Release them only after both the old stop and the replacement session end.
+@interface RoxyPlaybackLease : NSObject
+@property (nonatomic, copy) NSArray<NSURL *> *urls;
+@property (nonatomic, copy) NSArray *accesses;
+@property (nonatomic, copy) void (^completion)(BOOL);
+@property (nonatomic) BOOL success;
+@end
+@implementation RoxyPlaybackLease
+- (void)dealloc {
+    for (NSURL *url in _urls) [url stopAccessingSecurityScopedResource];
+    if (_completion) _completion(_success);
+}
+@end
+#endif
+
 #if TARGET_OS_TV
 @interface VLCPlaybackService () <VLCMediaPlayerDelegate, VLCMediaDelegate, VLCMediaListPlayerDelegate, VLCDrawable, VLCPictureInPictureDrawable>
 #elif TARGET_OS_WATCH
@@ -122,6 +139,7 @@ static const float kVLCPlaybackRateMaximum = 8.0f;
     BOOL _roxyStoppedWithError;
     BOOL _roxyAwaitingStart;
     BOOL _roxyStopAfterStart;
+    BOOL _roxyPauseAfterRestart;
     void (^_roxyPendingStart)(void);
 #endif
 }
@@ -263,6 +281,7 @@ static const float kVLCPlaybackRateMaximum = 8.0f;
         self->_pathToExternalSubtitlesFile = [subsFilePath copy];
         self->_sessionWillRestart = NO;
         self->_roxyStoppedWithError = NO;
+        self->_roxyPauseAfterRestart = NO;
         [self startPlayback];
     };
     if (_playerIsSetup || _roxyWaitingForStop || _roxyFinishingStop) {
@@ -292,6 +311,45 @@ static const float kVLCPlaybackRateMaximum = 8.0f;
 }
 
 #if TARGET_OS_IOS
+- (NSDictionary<NSString *, id> *)anime4KRenderMetrics
+{
+    return [_roxyVideoOutput.view valueForKey:@"renderMetrics"] ?: @{};
+}
+
+- (void)applyAnime4KSettings
+{
+    NSAssert(NSThread.isMainThread, @"Renderer changes must run on the main thread");
+    // Attached Metal sessions compare/bypass instantly, without restarting.
+    if (_roxyVideoOutput.attached || !_playerIsSetup || _renderer || _roxyPendingStart || _roxyWaitingForStop ||
+        ![NSUserDefaults.standardUserDefaults boolForKey:@"RoxyAnime4KEnabled"]) return;
+    VLCMediaList *list = self.mediaList;
+    NSInteger index = _currentIndex;
+    NSString *subtitles = [_pathToExternalSubtitlesFile copy];
+    float position = _mediaPlayer.position;
+    BOOL paused = _mediaPlayer.state == VLCMediaPlayerStatePaused;
+    RoxyPlaybackLease *lease = [RoxyPlaybackLease new];
+    lease.success = YES;
+    lease.completion = _playbackCompletion;
+    lease.urls = [_openedLocalURLs copy];
+    lease.accesses = [_openedLocalFileAccesses copy];
+    [_openedLocalURLs removeAllObjects];
+    [_openedLocalFileAccesses removeAllObjects];
+    void (^retainLease)(BOOL) = ^(BOOL success) { lease.success = lease.success && success; };
+    _playbackCompletion = retainLease;
+    [self playMediaList:list firstIndex:index subtitlesFilePath:subtitles completion:retainLease];
+    void (^start)(void) = _roxyPendingStart;
+    if (start) {
+        __weak typeof(self) weakSelf = self;
+        _roxyPendingStart = ^{
+            typeof(self) self = weakSelf;
+            if (!self) return;
+            self->_startPosition = position;
+            start();
+            self->_roxyPauseAfterRestart = paused;
+        };
+    }
+}
+
 - (void)_roxyRunPendingStart
 {
     dispatch_async(dispatch_get_main_queue(), ^{
@@ -686,6 +744,7 @@ static const float kVLCPlaybackRateMaximum = 8.0f;
         return;
     }
     _roxyPendingStart = nil;
+    _roxyPauseAfterRestart = NO;
     [self _roxyRequestStop];
 #else
     self.stopAfterCurrentItem = NO;
@@ -1278,6 +1337,12 @@ static const float kVLCPlaybackRateMaximum = 8.0f;
 
             case VLCMediaPlayerStatePlaying: {
                 APLog(@"%s: playing", __func__);
+#if TARGET_OS_IOS
+                if (self->_roxyPauseAfterRestart) {
+                    self->_roxyPauseAfterRestart = NO;
+                    [self->_mediaPlayer pause];
+                }
+#endif
                 [[NSNotificationCenter defaultCenter] postNotificationName:VLCPlaybackServicePlaybackDidResume object:self];
 #if TARGET_OS_IOS
                 [self saveMediaForWidget];

@@ -411,11 +411,52 @@ class VideoPlayerViewController: PlayerViewController {
         setupAccessibility()
         setupConstraints()
 #if os(iOS)
+        setupAnime4KControl()
         setupRendererDiscoverer()
 #endif
     }
 
     // MARK: - Setup methods
+
+#if os(iOS)
+    private lazy var anime4KButton: UIButton = {
+        let button = UIButton(type: .system)
+        var config = UIButton.Configuration.filled()
+        config.title = "Anime4K"
+        config.image = UIImage(systemName: "sparkles")
+        config.imagePadding = 8
+        config.cornerStyle = .capsule
+        config.baseBackgroundColor = UIColor(red: 0.40, green: 0.92, blue: 0.84, alpha: 0.20)
+        config.baseForegroundColor = .white
+        button.configuration = config
+        button.accessibilityIdentifier = "roxy.anime4k.open"
+        button.accessibilityLabel = "Anime4K quality and comparison"
+        button.addTarget(self, action: #selector(openAnime4K), for: .touchUpInside)
+        button.translatesAutoresizingMaskIntoConstraints = false
+        return button
+    }()
+
+    private func setupAnime4KControl() {
+        RoxyAppearance.glass(behind: mediaNavigationBar, radius: 22)
+        RoxyAppearance.glass(behind: mediaScrubProgressBar, radius: 18)
+        view.addSubview(anime4KButton)
+        NSLayoutConstraint.activate([
+            anime4KButton.leadingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.leadingAnchor, constant: 16),
+            anime4KButton.topAnchor.constraint(equalTo: mediaNavigationBar.bottomAnchor, constant: 12),
+            anime4KButton.heightAnchor.constraint(greaterThanOrEqualToConstant: 44)
+        ])
+        mediaNavigationBar.closePlaybackButton.setImage(UIImage(systemName: "xmark"), for: .normal)
+        mediaNavigationBar.queueButton.setImage(UIImage(systemName: "list.bullet"), for: .normal)
+        mediaNavigationBar.mediaTitleTextLabel.font = .systemFont(ofSize: 16, weight: .semibold)
+        videoPlayerControls.tintColor = .white
+        mediaScrubProgressBar.tintColor = RoxyAppearance.accent
+    }
+
+    @objc private func openAnime4K() {
+        setControlsHidden(false, animated: false)
+        RoxyAppearance.presentSettings(from: self)
+    }
+#endif
 
     private func setupViews() {
         view.backgroundColor = .black
@@ -462,6 +503,7 @@ class VideoPlayerViewController: PlayerViewController {
         } else {
 #if os(iOS)
             view.applyAccessibilityControls(
+                anime4KButton,
                 videoPlayerControls,
                 mediaScrubProgressBar,
                 volumeControlView,
@@ -987,6 +1029,7 @@ class VideoPlayerViewController: PlayerViewController {
             self?.mediaNavigationBar.alpha = uiComponentOpacity
             self?.optionsNavigationBar.alpha = uiComponentOpacity
 #if os(iOS)
+            self?.anime4KButton.alpha = uiComponentOpacity
             self?.volumeControlView.alpha = playerController.isVolumeGestureEnabled ? uiComponentOpacity : 0
             self?.brightnessControlView.alpha = playerController.isBrightnessGestureEnabled ? uiComponentOpacity : 0
 #endif
