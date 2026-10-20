@@ -360,6 +360,22 @@ static const float kVLCPlaybackRateMaximum = 8.0f;
     });
 }
 
+- (void)_roxyPauseRestartWhenReady:(NSUInteger)attempts
+{
+    if (!_roxyPauseAfterRestart || !_playerIsSetup || _roxyWaitingForStop) return;
+    id frames = [_roxyVideoOutput.view valueForKey:@"frames"];
+    // Playing precedes the first displayed frame. Pausing at that event can
+    // leave a newly attached output with no picture at all.
+    if ([[frames valueForKey:@"receivedFrameCount"] unsignedLongLongValue] > 0 || attempts == 0) {
+        _roxyPauseAfterRestart = NO;
+        [_mediaPlayer pause];
+    } else {
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.02 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+            [self _roxyPauseRestartWhenReady:attempts - 1];
+        });
+    }
+}
+
 - (void)_roxyRequestStop
 {
     if (_roxyWaitingForStop || _roxyFinishingStop) return;
@@ -555,6 +571,7 @@ static const float kVLCPlaybackRateMaximum = 8.0f;
         roxyView.frame = _actualVideoOutputView.bounds;
         [_actualVideoOutputView addSubview:roxyView];
     }
+    if (roxyView) [_actualVideoOutputView bringSubviewToFront:roxyView];
     [_roxyVideoOutput setFillVideo:NO aspectRatio:0];
 #endif
 
@@ -1339,8 +1356,7 @@ static const float kVLCPlaybackRateMaximum = 8.0f;
                 APLog(@"%s: playing", __func__);
 #if TARGET_OS_IOS
                 if (self->_roxyPauseAfterRestart) {
-                    self->_roxyPauseAfterRestart = NO;
-                    [self->_mediaPlayer pause];
+                    [self _roxyPauseRestartWhenReady:100];
                 }
 #endif
                 [[NSNotificationCenter defaultCenter] postNotificationName:VLCPlaybackServicePlaybackDidResume object:self];
@@ -2731,6 +2747,9 @@ static const float kVLCPlaybackRateMaximum = 8.0f;
 - (void)addSubview:(UIView *)view {
     [_actualVideoOutputView addSubview:view];
     view.frame = _actualVideoOutputView.bounds;
+#if TARGET_OS_IOS
+    if (_roxyVideoOutput.attached) [_actualVideoOutputView bringSubviewToFront:_roxyVideoOutput.view];
+#endif
 }
 
 - (CGRect)bounds { 

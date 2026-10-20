@@ -61,3 +61,19 @@ session on the lowest-memory supported device and the fastest available iPad.
 Resolve any compile failures from the first GitHub Actions run before making
 compatibility or performance claims. HDR preservation, enhanced Picture in
 Picture and zero-copy hardware decoding need additional implementation.
+
+
+## Color, glass controls and live enhancement (4.0.2)
+
+- Verify the visible Anime4K button opens the quality panel on iPhone portrait,
+  landscape, iPad split view and external displays. Check native glass on iOS
+  26+, material fallback on iOS 15–25, light/dark mode, VoiceOver, Dynamic Type
+  and Reduce Transparency.
+- Compare the same paused anime frame with Original and Anime4K. Check skin
+  tones, neutral gray, pure red/green/blue, fine lines and embedded subtitles.
+  Test both 8-bit H.264 and 10-bit HEVC SDR, including the reported failing MKV.
+- Switch all quality presets during playback, confirm the processed dimensions
+  and pass count, then measure 20-minute playback on older phones and M-series
+  iPads. Record GPU time, battery use, frame delivery and thermal downshifts.
+- Start with Anime4K off, pause/seek, enable from the player panel, and confirm
+  the position and file-provider access survive the output restart.

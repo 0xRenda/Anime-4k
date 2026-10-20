@@ -80,7 +80,7 @@ class VideoPlayerControls: UIView {
 
     func setupAccessibility() {
 #if os(iOS)
-        RoxyAppearance.glass(behind: self, radius: 28)
+        RoxyAppearance.glass(behind: self, radius: 28).overrideUserInterfaceStyle = .dark
         let symbols: [(UIButton, String)] = [(subtitleButton, "captions.bubble"), (backwardButton, "gobackward.10"),
             (forwardButton, "goforward.10"), (previousMediaButton, "backward.end.fill"),
             (nextMediaButton, "forward.end.fill"), (aspectRatioButton, "aspectratio"), (moreActionsButton, "ellipsis")]

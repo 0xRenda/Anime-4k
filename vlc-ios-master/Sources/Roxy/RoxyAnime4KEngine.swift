@@ -168,22 +168,27 @@ final class RoxyAnime4KEngine {
             guard let self = self else { return }
             do {
                 let binary = self.root.appendingPathComponent(shader.name + ".metallib")
-                let library: MTLLibrary
+                func pipelines(_ library: MTLLibrary) throws -> [CompiledPass] {
+                    try shader.passes.map { pass in
+                        guard let function = library.makeFunction(name: pass.function) else {
+                            throw RoxyShaderError.invalid("Missing Metal function: \(pass.function)")
+                        }
+                        return CompiledPass(shader: pass, pipeline: try self.device.makeComputePipelineState(function: function))
+                    }
+                }
+                let passes: [CompiledPass]
+                // A library can load successfully and reject its target OS
+                // only when creating a pipeline. Validate the complete chain.
                 if FileManager.default.fileExists(atPath: binary.path),
-                   let precompiled = try? self.device.makeLibrary(URL: binary) {
-                    library = precompiled
+                   let library = try? self.device.makeLibrary(URL: binary),
+                   let ready = try? pipelines(library) {
+                    passes = ready
                 } else {
                     let source = try String(contentsOf: self.root.appendingPathComponent(shader.name + ".metal"), encoding: .utf8)
                     let options = MTLCompileOptions()
                     options.fastMathEnabled = false
                     options.languageVersion = .version2_3
-                    library = try self.device.makeLibrary(source: source, options: options)
-                }
-                let passes = try shader.passes.map { pass -> CompiledPass in
-                    guard let function = library.makeFunction(name: pass.function) else {
-                        throw RoxyShaderError.invalid("Missing Metal function: \(pass.function)")
-                    }
-                    return CompiledPass(shader: pass, pipeline: try self.device.makeComputePipelineState(function: function))
+                    passes = try pipelines(self.device.makeLibrary(source: source, options: options))
                 }
                 DispatchQueue.main.async {
                     self.compiled[shader.name] = passes
@@ -208,6 +213,7 @@ final class RoxyAnime4KEngine {
         let defaults = UserDefaults.standard
         if (defaults.object(forKey: "RoxyAnime4KEnabled") as? Bool) == false || defaults.bool(forKey: "RoxyAnime4KPreviewOriginal") {
             status = "Anime4K off"
+            if !textures.isEmpty { resetMemory() }
             return input
         }
         if ProcessInfo.processInfo.thermalState == .critical {
@@ -219,6 +225,7 @@ final class RoxyAnime4KEngine {
            (defaults.string(forKey: "RoxyAnime4KShader") ?? "preset") == "preset",
            outputSize.x <= input.width && outputSize.y <= input.height {
             status = "Native resolution"
+            if !textures.isEmpty { resetMemory() }
             return input
         }
         let quality = requestedQuality()

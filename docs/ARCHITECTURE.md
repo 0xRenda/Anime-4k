@@ -104,3 +104,21 @@ compares its GPU result against that reference if a Metal device exists. A
 GPU-less runner reports that test as skipped, not passed. The archive step
 compiles every shader for iOS and builds the actual iOS renderer and VLC bridge.
 `verify_ipa.py` checks the resulting app binary, device families and libraries.
+
+
+## Explicit pixel layout and live controls (4.0.2)
+
+The pinned VLC 4 ABI defines RV32 as XRGB in memory order. Requesting RV32
+and interpreting it as CoreVideo BGRA shifted all color channels. The callback
+now requests the explicit BGRA fourcc, matching both the pixel buffer pool and
+Metal texture. Synthetic BT.709 H.264 8-bit and HEVC 10-bit MKVs exercise the
+complete VLC conversion → callback → CNN → presentation path. Readback uses
+an additional render target and the same presentation shader; normal playback
+keeps framebuffer-only drawables and performs no CPU readback.
+
+MTKView targets display pixels using the window screen scale, including Retina
+iPads. The panel reports actual input/output/display dimensions, encoded passes
+and GPU completion timing. Original comparison bypasses the CNN while retaining
+the active decoder and frame. Enabling from a native session restarts the video
+output asynchronously and restores position/pause; a shared lease retains file
+access until both the old reader and replacement session release it.

@@ -52,10 +52,17 @@ Opening failures report an error instead of silently discarding the request.
 
 ## Use Anime4K
 
-Open **Settings → Anime4K**, enable upscaling and reopen the video. Choose
-Automatic, Low, Medium or High. Turn on **Show Anime4K status** to inspect the
-active preset and preparation/fallback messages. Individual advanced shaders
-replace the preset chain; they can be substantially more expensive.
+Tap the **Anime4K** sparkle button at the top left of the video, or the
+Anime4K card at the top of Settings. Enable upscaling and choose Auto, Low,
+Medium or High during playback. **Original / Anime4K** compares the same frame
+without seeking or reopening. The panel reports input and processed resolution,
+pass count and GPU time; the optional overlay shows processing status.
+Individual advanced shaders replace the preset chain. Auto skips enhancement
+when the video already meets the display resolution.
+
+The player controls and menus use glass surfaces, with native Liquid Glass on
+iOS 26+ and material fallbacks on iOS 15–25. Appearance follows light/dark mode
+and Reduce Transparency. No unreleased iOS SDK is required.
 
 | Quality | Shader chain | Intended starting point |
 | --- | --- | --- |

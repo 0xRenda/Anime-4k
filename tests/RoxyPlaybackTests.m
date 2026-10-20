@@ -266,7 +266,8 @@
         id view = [output valueForKey:@"view"];
         id frames = [view valueForKey:@"frames"];
         return [[frames valueForKey:@"receivedFrameCount"] unsignedLongLongValue] > 0;
-    } seconds:10], @"The VLC callback never delivered a video frame to Anime4K");
+    } seconds:10], @"No callback: view=%@ window=%@ active=%@ metrics=%@", self.animeView,
+      self.animeView.window, [[self.animeView valueForKey:@"frames"] valueForKey:@"acceptingFrames"], service.anime4KRenderMetrics);
 }
 
 - (void)testVideoReopensWhilePreviousPlayerIsDismissing
@@ -365,13 +366,13 @@
     [UIApplication.sharedApplication.delegate application:UIApplication.sharedApplication openURL:url options:@{}];
     [self assertPlaying:url];
     VLCPlaybackService *service = VLCPlaybackService.sharedInstance;
-    [service pause];
     for (NSString *quality in @[@"low", @"medium", @"high"]) {
         [defaults setObject:quality forKey:@"RoxyAnime4KQuality"];
         XCTAssertTrue([self waitUntil:^BOOL {
             NSDictionary *metrics = service.anime4KRenderMetrics;
             return [metrics[@"passes"] intValue] > 0 && [metrics[@"quality"] isEqual:quality];
         } seconds:60], @"%@ failed to run %@: %@", name, quality, service.anime4KRenderMetrics);
+        [service pause];
         NSDictionary *metrics = service.anime4KRenderMetrics;
         XCTAssertEqual([metrics[@"inputWidth"] intValue], 128);
         XCTAssertEqual([metrics[@"outputWidth"] intValue], 256, @"The CNN must actually double the resolution");
@@ -399,7 +400,7 @@
     __block int completions = 0;
     [service playMediaList:list firstIndex:0 subtitlesFilePath:nil completion:^(BOOL success) { completions++; }];
     [self assertPlaying:url];
-    service.playbackPosition = 2;
+    service.playbackPosition = 0.2;
     [service pause];
     XCTAssertTrue([self waitUntil:^BOOL { return service.mediaPlayerState == VLCMediaPlayerStatePaused; } seconds:10]);
     float position = service.playbackPosition;
@@ -408,9 +409,10 @@
     [service applyAnime4KSettings];
     XCTAssertTrue([self waitUntil:^BOOL {
         return service.mediaPlayerState == VLCMediaPlayerStatePaused && [service.anime4KRenderMetrics[@"passes"] intValue] > 0;
-    } seconds:60]);
+    } seconds:60], @"Restart state=%ld view=%@ window=%@ metrics=%@", (long)service.mediaPlayerState,
+      self.animeView, self.animeView.window, service.anime4KRenderMetrics);
     XCTAssertEqualObjects(service.currentlyPlayingMedia.url, url);
-    XCTAssertEqualWithAccuracy(service.playbackPosition, position, 0.75);
+    XCTAssertEqualWithAccuracy(service.playbackPosition, position, 0.06);
     XCTAssertEqual(completions, 0, @"Changing the renderer must not finish the caller's file access");
     [self stopAndWait];
     XCTAssertEqual(completions, 1);

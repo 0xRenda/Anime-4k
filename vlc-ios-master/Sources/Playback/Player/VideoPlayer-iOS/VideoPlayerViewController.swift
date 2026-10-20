@@ -437,8 +437,8 @@ class VideoPlayerViewController: PlayerViewController {
     }()
 
     private func setupAnime4KControl() {
-        RoxyAppearance.glass(behind: mediaNavigationBar, radius: 22)
-        RoxyAppearance.glass(behind: mediaScrubProgressBar, radius: 18)
+        RoxyAppearance.glass(behind: mediaNavigationBar, radius: 22).overrideUserInterfaceStyle = .dark
+        RoxyAppearance.glass(behind: mediaScrubProgressBar, radius: 18).overrideUserInterfaceStyle = .dark
         view.addSubview(anime4KButton)
         NSLayoutConstraint.activate([
             anime4KButton.leadingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.leadingAnchor, constant: 16),

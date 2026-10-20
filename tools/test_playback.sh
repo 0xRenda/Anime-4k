@@ -6,6 +6,9 @@ export ROXY_QUALITY="${ROXY_QUALITY:-automatic}"
 mkdir -p build
 test -s tests/fixtures/shared.mkv
 test -s tests/fixtures/shared.mp4
+# The device archive is already packaged. Simulator resources need a different
+# Metal target even on the same ARM64 host GPU.
+python3 tools/compile_metal.py --sdk iphonesimulator
 bundle exec ruby tools/prepare_playback_tests.rb
 xcrun simctl list devices available --json > .build/playback-simulators.json
 SIMULATOR_ID="$(python3 - <<'PY'
@@ -33,9 +36,12 @@ TEST_ARGS=(-workspace vlc-ios-master/VLC.xcworkspace -scheme Roxy-PlaybackTests
 xcodebuild build-for-testing "${TEST_ARGS[@]}" 2>&1 | tee "build/playback-build-$ROXY_QUALITY.log"
 xcrun simctl boot "$SIMULATOR_ID" 2>/dev/null || true
 xcrun simctl bootstatus "$SIMULATOR_ID" -b
+copy_images() {
+  APP_DATA="$(xcrun simctl get_app_container "$SIMULATOR_ID" "${ROXY_BUNDLE_ID:-com.roxy.player}" data 2>/dev/null)" || return 0
+  mkdir -p build/rendered-validation
+  cp "$APP_DATA/Library/Caches/RoxyValidation/"*.png build/rendered-validation/ 2>/dev/null || true
+}
+trap copy_images EXIT
 xcodebuild test-without-building "${TEST_ARGS[@]}" \
   -resultBundlePath "$ROOT/build/playback-tests-$ROXY_QUALITY.xcresult" \
   2>&1 | tee "build/playback-tests-$ROXY_QUALITY.log"
-APP_DATA="$(xcrun simctl get_app_container "$SIMULATOR_ID" "${ROXY_BUNDLE_ID:-com.roxy.player}" data)"
-mkdir -p build/rendered-validation
-cp "$APP_DATA/Library/Caches/RoxyValidation/"*.png build/rendered-validation/
