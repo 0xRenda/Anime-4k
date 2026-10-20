@@ -326,6 +326,7 @@ static const float kVLCPlaybackRateMaximum = 8.0f;
     NSInteger index = _currentIndex;
     NSString *subtitles = [_pathToExternalSubtitlesFile copy];
     float position = _mediaPlayer.position;
+    UIView *outputView = _videoOutputViewWrapper;
     BOOL paused = _mediaPlayer.state == VLCMediaPlayerStatePaused;
     RoxyPlaybackLease *lease = [RoxyPlaybackLease new];
     lease.success = YES;
@@ -346,6 +347,7 @@ static const float kVLCPlaybackRateMaximum = 8.0f;
             self->_startPosition = position;
             start();
             self->_roxyPauseAfterRestart = paused;
+            if (outputView.window) self.videoOutputView = outputView;
         };
     }
 }
@@ -1778,12 +1780,16 @@ static const float kVLCPlaybackRateMaximum = 8.0f;
 {
     dispatch_async(dispatch_get_main_queue(), ^{
         if (videoOutputView) {
+            [videoOutputView.superview layoutIfNeeded];
             if ([self->_actualVideoOutputView superview] != nil)
                 [self->_actualVideoOutputView removeFromSuperview];
 
-            self->_actualVideoOutputView.frame = (CGRect){CGPointZero, videoOutputView.frame.size};
+            self->_actualVideoOutputView.frame = videoOutputView.bounds;
 
             [videoOutputView addSubview:self->_actualVideoOutputView];
+#if TARGET_OS_IOS
+            self->_roxyVideoOutput.view.frame = self->_actualVideoOutputView.bounds;
+#endif
             [self->_actualVideoOutputView layoutSubviews];
             [self->_actualVideoOutputView updateConstraints];
             [self->_actualVideoOutputView setNeedsLayout];

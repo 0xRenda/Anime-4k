@@ -4,6 +4,7 @@
 #import <UniformTypeIdentifiers/UniformTypeIdentifiers.h>
 #import <VLCKit/VLCKit.h>
 #import "VLCPlaybackService.h"
+#import "VLCPlayerDisplayController.h"
 #import "VLCAppDelegate.h"
 #import "VLCDocumentPickerController.h"
 
@@ -16,6 +17,9 @@
 @end
 @protocol RoxyFrameCapture <NSObject>
 - (void)captureNextFrame:(void (^)(UIImage *))completion;
+@end
+@protocol RoxyPlayerInteraction <NSObject>
+- (void)handleTapOnVideo;
 @end
 
 @interface RoxyPlaybackTests : XCTestCase
@@ -39,6 +43,7 @@
     [NSUserDefaults.standardUserDefaults setBool:NO forKey:@"RoxyAnime4KPreviewOriginal"];
     [NSUserDefaults.standardUserDefaults setObject:@"preset" forKey:@"RoxyAnime4KShader"];
     [NSUserDefaults.standardUserDefaults setInteger:0 forKey:@"ContinuePlayback"];
+    [NSUserDefaults.standardUserDefaults setBool:YES forKey:@"AlwaysUseFullscreenForVideo"];
     [self stopAndWait];
 }
 
@@ -363,16 +368,23 @@
     [defaults setObject:@"low" forKey:@"RoxyAnime4KQuality"];
     NSURL *url = [[NSBundle bundleForClass:self.class] URLForResource:name withExtension:@"mkv"];
     XCTAssertNotNil(url);
+    UIView *previousView = self.animeView;
+    unsigned long long previousSequence = [[[previousView valueForKey:@"frames"] valueForKey:@"receivedFrameCount"] unsignedLongLongValue];
     [UIApplication.sharedApplication.delegate application:UIApplication.sharedApplication openURL:url options:@{}];
     [self assertPlaying:url];
     VLCPlaybackService *service = VLCPlaybackService.sharedInstance;
+    XCTAssertTrue([self waitUntil:^BOOL {
+        UIView *view = self.animeView;
+        unsigned long long sequence = [[[view valueForKey:@"frames"] valueForKey:@"receivedFrameCount"] unsignedLongLongValue];
+        return sequence > 0 && (view != previousView || sequence > previousSequence);
+    } seconds:15], @"Each codec must deliver a new frame; a previous video's picture cannot pass this test");
     for (NSString *quality in @[@"low", @"medium", @"high"]) {
         [defaults setObject:quality forKey:@"RoxyAnime4KQuality"];
         XCTAssertTrue([self waitUntil:^BOOL {
             NSDictionary *metrics = service.anime4KRenderMetrics;
             return [metrics[@"passes"] intValue] > 0 && [metrics[@"quality"] isEqual:quality];
         } seconds:60], @"%@ failed to run %@: %@", name, quality, service.anime4KRenderMetrics);
-        [service pause];
+        if (service.isPlaying) [service pause];
         NSDictionary *metrics = service.anime4KRenderMetrics;
         XCTAssertEqual([metrics[@"inputWidth"] intValue], 128);
         XCTAssertEqual([metrics[@"outputWidth"] intValue], 256, @"The CNN must actually double the resolution");
@@ -395,11 +407,18 @@
 {
     NSURL *url = [self copyFixture:@"mkv" into:self.testDirectory name:@"enable live.mkv"];
     VLCPlaybackService *service = VLCPlaybackService.sharedInstance;
-    VLCMediaList *list = [VLCMediaList new];
-    [list addMedia:[VLCMedia mediaWithURL:url]];
     __block int completions = 0;
-    [service playMediaList:list firstIndex:0 subtitlesFilePath:nil completion:^(BOOL success) { completions++; }];
+    [UIApplication.sharedApplication.delegate application:UIApplication.sharedApplication openURL:url options:@{}];
     [self assertPlaying:url];
+    [service.playerDisplayController showFullscreenPlayback];
+    XCTAssertTrue([self waitUntil:^BOOL {
+        return service.videoOutputView.window != nil && service.videoOutputView.bounds.size.width > 0;
+    } seconds:10], @"Start with the same visible player from which a user opens Anime4K settings");
+    void (^originalCompletion)(BOOL) = [service valueForKey:@"playbackCompletion"];
+    [service setValue:[^(BOOL success) {
+        completions++;
+        if (originalCompletion) originalCompletion(success);
+    } copy] forKey:@"playbackCompletion"];
     service.playbackPosition = 0.2;
     [service pause];
     XCTAssertTrue([self waitUntil:^BOOL { return service.mediaPlayerState == VLCMediaPlayerStatePaused; } seconds:10]);
@@ -429,15 +448,20 @@
     NSURL *url = [[NSBundle bundleForClass:self.class] URLForResource:@"bars-8bit" withExtension:@"mkv"];
     [UIApplication.sharedApplication.delegate application:UIApplication.sharedApplication openURL:url options:@{}];
     [self assertPlaying:url];
+    [VLCPlaybackService.sharedInstance.playerDisplayController showFullscreenPlayback];
     __block UIButton *button = nil;
     XCTAssertTrue([self waitUntil:^BOOL {
         button = (UIButton *)[self findView:window identifier:@"roxy.anime4k.open"];
-        return button.window != nil && button.alpha > 0;
+        return button.window != nil;
     } seconds:10]);
     XCTAssertTrue([self waitUntil:^BOOL {
         UIViewController *player = window.rootViewController.presentedViewController;
         return player != nil && !player.isBeingPresented && !player.isBeingDismissed;
     } seconds:10]);
+    if (button.alpha == 0) {
+        [(id<RoxyPlayerInteraction>)VLCPlaybackService.sharedInstance.playerDisplayController.videoPlayerViewController handleTapOnVideo];
+    }
+    XCTAssertTrue([self waitUntil:^BOOL { return button.alpha > 0; } seconds:5], @"Tapping the video must reveal Anime4K controls");
     [NSRunLoop.mainRunLoop runUntilDate:[NSDate dateWithTimeIntervalSinceNow:0.6]];
     [self saveWindow:window name:@"player-glass"];
     [button sendActionsForControlEvents:UIControlEventTouchUpInside];

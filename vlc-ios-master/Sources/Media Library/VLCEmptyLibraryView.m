@@ -83,7 +83,9 @@
     _iconView.tintColor = colors.orangeUI;
     UIButtonConfiguration *configuration = _learnMoreButton.configuration;
     configuration.baseBackgroundColor = colors.orangeUI;
+    configuration.baseForegroundColor = UIColor.whiteColor;
     _learnMoreButton.configuration = configuration;
+    [_learnMoreButton setTitleColor:UIColor.whiteColor forState:UIControlStateNormal];
     _learnMoreButton.tintColor = colors.orangeUI;
 #else
     if (colors.isDark) {
