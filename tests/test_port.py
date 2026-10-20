@@ -40,24 +40,41 @@ def evaluate(expression, sizes):
     return stack[0]
 
 
-def chain(names, input_size, output_size):
+def chain(names, input_size, output_size, *, with_trace=False):
     main = input_size
     passes = 0
+    deferred = []
+    trace = []
+
+    def run_pass(name, item, sizes):
+        nonlocal passes
+        sizes['HOOKED'] = sizes['MAIN']
+        if any(bind not in sizes for bind in item['binds']): return
+        if item.get('when') and not evaluate(item['when'], sizes): return
+        width = evaluate(item['width'], sizes) if 'width' in item else sizes['MAIN'][0]
+        height = evaluate(item['height'], sizes) if 'height' in item else sizes['MAIN'][1]
+        trace.append({'shader': name, 'function': item['function'],
+                      'hook': item['hook'], 'inputs': {bind: sizes[bind] for bind in item['binds']},
+                      'output': (width, height)})
+        sizes[item.get('save', 'MAIN')] = (width, height)
+        passes += 1
+
     for name in names:
         shader = next(s for s in MANIFEST['shaders'] if s['name'] == name)
         sizes = {'MAIN': main, 'NATIVE': input_size, 'OUTPUT': output_size}
         for item in shader['passes']:
-            sizes['HOOKED'] = sizes['MAIN']
-            if any(bind not in sizes for bind in item['binds']): continue
-            if item.get('when') and not evaluate(item['when'], sizes): continue
-            for bind in item['binds']:
-                if bind not in sizes: raise ValueError('Missing texture ' + bind)
-            width = evaluate(item['width'], sizes) if 'width' in item else sizes['MAIN'][0]
-            height = evaluate(item['height'], sizes) if 'height' in item else sizes['MAIN'][1]
-            sizes[item.get('save', 'MAIN')] = (width, height)
-            passes += 1
+            if item['hook'] == 'PREKERNEL':
+                deferred.append((name, item, sizes.copy()))
+                continue
+            run_pass(name, item, sizes)
         main = sizes['MAIN']
-    return main, passes
+    # mpv's PREKERNEL stage runs after the complete MAIN hook chain. Named
+    # statistics still refer to the earlier shader file's saved source data.
+    for name, item, saved_sizes in deferred:
+        sizes = saved_sizes | {'MAIN': main, 'NATIVE': input_size, 'OUTPUT': output_size}
+        run_pass(name, item, sizes)
+        main = sizes['MAIN']
+    return (main, passes, trace) if with_trace else (main, passes)
 
 
 class ShaderPortTests(unittest.TestCase):
@@ -117,6 +134,20 @@ class ShaderPortTests(unittest.TestCase):
             actual, count = chain(MANIFEST['presets']['low'], (640, 360), size)
             self.assertEqual(actual, (640, 360))
             self.assertEqual(count, 0)
+
+    def test_highlight_clamp_runs_after_enhancement_with_original_statistics(self):
+        names = ['Anime4K_Clamp_Highlights', 'Anime4K_Restore_CNN_VL', 'Anime4K_Upscale_CNN_x2_VL']
+        size, count, trace = chain(names, (640, 360), (1280, 720), with_trace=True)
+        self.assertEqual(size, (1280, 720))
+        self.assertEqual(count, len(trace))
+        self.assertEqual(trace[0]['shader'], 'Anime4K_Clamp_Highlights')
+        self.assertEqual(trace[0]['inputs']['MAIN'], (640, 360))
+        final = trace[-1]
+        self.assertEqual(final['shader'], 'Anime4K_Clamp_Highlights')
+        self.assertEqual(final['hook'], 'PREKERNEL')
+        self.assertEqual(final['inputs']['HOOKED'], (1280, 720))
+        self.assertEqual(final['inputs']['STATSMAX'], (640, 360))
+        self.assertEqual(final['output'], (1280, 720))
 
     def test_denoise_arrays_and_helper_context(self):
         source = (port.OUTPUT / 'Anime4K_Denoise_Bilateral_Median.metal').read_text()

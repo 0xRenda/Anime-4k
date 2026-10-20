@@ -143,8 +143,8 @@ def generate(source: Path = SOURCE) -> dict[str, bytes]:
                             for i, item in enumerate(passes)]})
     manifest = {"schema": 1, "shaders": shaders, "presets": {
         "low": ["Anime4K_Upscale_CNN_x2_S"],
-        "medium": ["Anime4K_Restore_CNN_S", "Anime4K_Upscale_CNN_x2_M"],
-        "high": ["Anime4K_Restore_CNN_L", "Anime4K_Upscale_CNN_x2_VL"]}}
+        "medium": ["Anime4K_Clamp_Highlights", "Anime4K_Restore_CNN_S", "Anime4K_Upscale_CNN_x2_M"],
+        "high": ["Anime4K_Clamp_Highlights", "Anime4K_Restore_CNN_VL", "Anime4K_Upscale_CNN_x2_VL"]}}
     outputs["manifest.json"] = (json.dumps(manifest, indent=2) + "\n").encode()
     return outputs
 

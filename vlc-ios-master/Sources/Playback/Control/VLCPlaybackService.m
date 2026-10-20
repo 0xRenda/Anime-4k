@@ -320,8 +320,9 @@ static const float kVLCPlaybackRateMaximum = 8.0f;
 {
     NSAssert(NSThread.isMainThread, @"Renderer changes must run on the main thread");
     // Attached Metal sessions compare/bypass instantly, without restarting.
-    if (_roxyVideoOutput.attached || !_playerIsSetup || _renderer || _roxyPendingStart || _roxyWaitingForStop ||
-        ![NSUserDefaults.standardUserDefaults boolForKey:@"RoxyAnime4KEnabled"]) return;
+    BOOL presentationFailed = [[_roxyVideoOutput.view valueForKey:@"presentationFailed"] boolValue];
+    if ((_roxyVideoOutput.attached && !presentationFailed) || !_playerIsSetup || _renderer || _roxyPendingStart || _roxyWaitingForStop ||
+        (![NSUserDefaults.standardUserDefaults boolForKey:@"RoxyAnime4KEnabled"] && !presentationFailed)) return;
     VLCMediaList *list = self.mediaList;
     NSInteger index = _currentIndex;
     NSString *subtitles = [_pathToExternalSubtitlesFile copy];

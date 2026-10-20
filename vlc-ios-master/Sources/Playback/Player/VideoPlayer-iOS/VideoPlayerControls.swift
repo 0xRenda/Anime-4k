@@ -80,15 +80,18 @@ class VideoPlayerControls: UIView {
 
     func setupAccessibility() {
 #if os(iOS)
+        overrideUserInterfaceStyle = .dark
         RoxyAppearance.glass(behind: self, radius: 28).overrideUserInterfaceStyle = .dark
         let symbols: [(UIButton, String)] = [(subtitleButton, "captions.bubble"), (backwardButton, "gobackward.10"),
             (forwardButton, "goforward.10"), (previousMediaButton, "backward.end.fill"),
             (nextMediaButton, "forward.end.fill"), (aspectRatioButton, "aspectratio"), (moreActionsButton, "ellipsis")]
         for (button, symbol) in symbols {
-            button.setImage(UIImage(systemName: symbol), for: .normal)
+            button.setImage(UIImage(systemName: symbol,
+                                    withConfiguration: UIImage.SymbolConfiguration(pointSize: 21, weight: .medium)), for: .normal)
             button.tintColor = .white
         }
-        playPauseButton.tintColor = RoxyAppearance.accent
+        playPauseButton.tintColor = RoxyAppearance.playbackAccent
+        playPauseButton.setPreferredSymbolConfiguration(UIImage.SymbolConfiguration(pointSize: 34, weight: .regular), forImageIn: .normal)
 #endif
         subtitleButton.accessibilityLabel = NSLocalizedString("SUBTITLE_AND_TRACK_BUTTON",
                                                               comment: "")

@@ -42,6 +42,7 @@
     [NSUserDefaults.standardUserDefaults setBool:NO forKey:@"RoxyAnime4KEnabled"];
     [NSUserDefaults.standardUserDefaults setBool:NO forKey:@"RoxyAnime4KPreviewOriginal"];
     [NSUserDefaults.standardUserDefaults setObject:@"preset" forKey:@"RoxyAnime4KShader"];
+    [NSUserDefaults.standardUserDefaults setObject:@"standard" forKey:@"RoxyAnime4KMode"];
     // Values are Never=-1, Ask=0, Always=1. A resume prompt intentionally
     // blocks presentation and must not leak between independent test cases.
     [NSUserDefaults.standardUserDefaults setInteger:-1 forKey:@"ContinuePlayback"];
@@ -409,6 +410,65 @@
 
 - (void)testRendered8BitColorsAndAllThreeUpscalingPresets { [self validateRenderedFixture:@"bars-8bit"]; }
 - (void)testRendered10BitColorsAndAllThreeUpscalingPresets { [self validateRenderedFixture:@"bars-10bit"]; }
+
+- (void)testPausedComparisonAndMenuPreferencesReuseEnhancedFrame
+{
+    NSUserDefaults *defaults = NSUserDefaults.standardUserDefaults;
+    [defaults setBool:YES forKey:@"RoxyAnime4KEnabled"];
+    [defaults setObject:@"high" forKey:@"RoxyAnime4KQuality"];
+    NSURL *url = [[NSBundle bundleForClass:self.class] URLForResource:@"bars-8bit" withExtension:@"mkv"];
+    [UIApplication.sharedApplication.delegate application:UIApplication.sharedApplication openURL:url options:@{}];
+    [self assertPlaying:url];
+    VLCPlaybackService *service = VLCPlaybackService.sharedInstance;
+    [service.playerDisplayController showFullscreenPlayback];
+    XCTAssertTrue([self waitUntil:^BOOL {
+        UIViewController *player = [(VLCAppDelegate *)UIApplication.sharedApplication.delegate window].rootViewController.presentedViewController;
+        return self.animeView.window != nil && player != nil && !player.isBeingPresented && !player.isBeingDismissed &&
+            [[[self.animeView valueForKey:@"frames"] valueForKey:@"receivedFrameCount"] unsignedLongLongValue] > 0;
+    } seconds:15]);
+    [service pause];
+    XCTAssertTrue([self waitUntil:^BOOL { return service.mediaPlayerState == VLCMediaPlayerStatePaused; } seconds:10]);
+    XCTAssertTrue([self waitUntil:^BOOL {
+        NSDictionary *metrics = service.anime4KRenderMetrics;
+        unsigned long long latest = [[[self.animeView valueForKey:@"frames"] valueForKey:@"receivedFrameCount"] unsignedLongLongValue];
+        return [metrics[@"quality"] isEqual:@"high"] && [metrics[@"passes"] intValue] > 0 &&
+            [metrics[@"inputSequence"] unsignedLongLongValue] == latest;
+    } seconds:60], @"A delivered paused High frame must finish before testing presentation reuse: %@", service.anime4KRenderMetrics);
+    UIImage *before = self.captureVideo;
+    NSDictionary *baseline = service.anime4KRenderMetrics;
+    unsigned long long count = [[self.animeView valueForKey:@"cnnFrameCount"] unsignedLongLongValue];
+    XCTAssertGreaterThan(count, 0u);
+    XCTAssertEqual([baseline[@"cnnFrameCount"] unsignedLongLongValue], count);
+    XCTAssertGreaterThan([baseline[@"sourceFPS"] doubleValue], 0);
+
+    [defaults setBool:![defaults boolForKey:@"RoxyAnime4KShowStatus"] forKey:@"RoxyAnime4KShowStatus"];
+    [defaults setObject:NSUUID.UUID.UUIDString forKey:@"RoxyValidationUnrelatedPreference"];
+    UIImage *afterPreferences = self.captureVideo;
+    XCTAssertEqual([[self.animeView valueForKey:@"cnnFrameCount"] unsignedLongLongValue], count,
+                   @"Status and unrelated menu preferences must not rerun a paused CNN");
+    XCTAssertEqualObjects(UIImagePNGRepresentation(afterPreferences), UIImagePNGRepresentation(before));
+
+    [defaults setBool:YES forKey:@"RoxyAnime4KPreviewOriginal"];
+    XCTAssertTrue([self waitUntil:^BOOL { return [service.anime4KRenderMetrics[@"passes"] intValue] == 0; } seconds:10]);
+    [self assertColorBars:self.captureVideo name:@"paused-cache-original"];
+    [defaults setBool:NO forKey:@"RoxyAnime4KPreviewOriginal"];
+    XCTAssertTrue([self waitUntil:^BOOL {
+        NSDictionary *metrics = service.anime4KRenderMetrics;
+        return [metrics[@"quality"] isEqual:@"high"] && [metrics[@"outputWidth"] intValue] == 256 && [metrics[@"passes"] intValue] > 0;
+    } seconds:10]);
+    UIImage *restored = self.captureVideo;
+    NSDictionary *final = service.anime4KRenderMetrics;
+    XCTAssertEqual([[self.animeView valueForKey:@"cnnFrameCount"] unsignedLongLongValue], count,
+                   @"Returning from Original must reuse the exact enhanced paused frame");
+    XCTAssertTrue([final[@"computationReused"] boolValue]);
+    XCTAssertEqual([final[@"cnnFrameCount"] unsignedLongLongValue], count);
+    XCTAssertEqual([final[@"inputSequence"] unsignedLongLongValue], [baseline[@"inputSequence"] unsignedLongLongValue]);
+    XCTAssertEqualWithAccuracy([final[@"sourceFPS"] doubleValue], [baseline[@"sourceFPS"] doubleValue], 0.000001,
+                              @"Menu redraws must not change the measured decoder cadence");
+    XCTAssertEqualObjects(UIImagePNGRepresentation(restored), UIImagePNGRepresentation(before));
+    [self assertColorBars:restored name:@"paused-cache-enhanced"];
+    [defaults removeObjectForKey:@"RoxyValidationUnrelatedPreference"];
+}
 
 - (void)testEnablingAnime4KPreservesPausedMediaAndFileLease
 {

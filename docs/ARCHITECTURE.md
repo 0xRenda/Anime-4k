@@ -5,7 +5,7 @@
 ```text
 VLC demux/CPU decode and color conversion
     → vmem lock/unlock/display callbacks at VLC's presentation timestamp
-    → aligned BGRX staging storage
+    → aligned BGRA staging storage
     → bounded CVPixelBuffer pool (maximum 3)
     → latest-frame slot
     → CVMetalTextureCache
@@ -52,7 +52,9 @@ library cannot load. Differences from the source language are:
 - Missing conditional BIND textures skip a pass, matching mpv hook behavior.
 - A MAIN texture referenced implicitly by a source hook is bound explicitly.
 
-`PREKERNEL` hooks execute in the selected sequential chain before presentation.
+`MAIN` hooks execute in chain order. `PREKERNEL` hooks are deferred until all
+restoration/upscale stages finish, retaining their file-local source statistics.
+This lets Clamp_Highlights constrain final output instead of clamping the input.
 The player is an SDR RGB pipeline, rather than mpv's full color-managed rendering
 graph. Shipping every shader does not mean every experimental/GAN variant can
 run in real time on a phone. The two AutoDownscale shaders are prefilters and
@@ -67,19 +69,32 @@ ordinary Metal compute and does not claim specialized M5 tensor or Neural Engine
 kernels. CPU decoding uses VLC's existing scheduling.
 
 Serious thermal state or Low Power Mode caps the effective preset at Low.
-Critical thermal state bypasses filtering. Thirty persistently expensive GPU
-frames reduce the quality ceiling for that playback session. There is no
-automatic upward oscillation during playback. A manually chosen advanced shader
+Critical thermal state bypasses filtering. Auto lowers its quality after 1.5
+seconds of sustained averaged GPU load above 85% of the source-frame budget;
+it can recover after 8 seconds below 40%. Source cadence is measured at VLC's
+frame delivery, independent of settings redraws. Manual Low/Medium/High ignore
+timing demotions, while temperature, power and memory protections remain. An advanced shader
 is not automatically replaced by a different model; critical temperature still
 bypasses it and memory limits still apply.
 
 Intermediate textures are assigned by last use and reused when dependencies
 allow it. Unique intermediate allocations are limited to 192/320/640 MiB for
-Low/Medium/High. These budgets exclude VLC's decoder, pipeline objects and CPU
+Low/Medium/High; devices with Apple GPU family 7+ and at least 8 GiB RAM allow
+384/1024 MiB for Medium/High. These are allocation ceilings, not reservations.
+These budgets exclude VLC's decoder, pipeline objects and CPU
 input buffers. A rejected allocation plan falls back to original video and is
 not retried each frame. Video dimensions, window size and quality invalidate
-the plan. Compilation runs off the main thread, and unprocessed frames remain
-visible while shaders prepare.
+the plan. Strong first falls back to Standard with the same model size if its
+extra stage exceeds the budget. Shader and presentation pipeline creation run
+off the main thread, and immutable shader states use a bounded shared cache.
+Unprocessed frames remain visible while shaders prepare.
+
+The renderer retains one completed enhanced output for the latest input frame.
+Paused comparisons, overlay changes and presentation-only redraws reuse it;
+quality/mode/shader, geometry, thermal/power and shader readiness changes
+invalidate it. Unrelated preferences do not trigger CNN work. Memory warnings
+release the cached output and intermediate plan. Settings use deferred cached
+shader menus and static cards rather than stacked live blur surfaces.
 
 ## Known limits requiring further work
 

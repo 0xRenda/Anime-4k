@@ -62,6 +62,24 @@ Resolve any compile failures from the first GitHub Actions run before making
 compatibility or performance claims. HDR preservation, enhanced Picture in
 Picture and zero-copy hardware decoding need additional implementation.
 
+## M5 quality and menu responsiveness (4.0.3)
+
+- Compare High + Standard and Original on a paused anime frame. Confirm High
+  remains selected across demanding scenes; confirm Auto lowers and later
+  recovers quality rather than remaining at Low for the entire session.
+- Test native-size Medium/High restoration, Soft on aliased 720p material, and
+  Strong on sources enlarged at least 2× in both dimensions. Strong must report
+  its Standard fallback on smaller scaling ratios or Low quality.
+- Play 720p and 1080p at 24/30/60 fps for 20 minutes. Record actual input/output
+  size, GPU ms, source FPS, skipped frames, thermal state and peak resident
+  memory. Repeat on the M5 iPad and an older supported iPhone.
+- Open and scroll Anime4K settings repeatedly during playback. Switch quality,
+  restoration mode, Original comparison and the advanced shader menu. Verify
+  readable controls in light/dark mode, portrait/landscape and iPad split view.
+- While paused, toggle the status overlay and compare Original/Anime4K. The
+  completed enhanced frame should be reused without another CNN evaluation.
+  Test memory pressure and resume afterward; the held picture must survive.
+
 
 ## Color, glass controls and live enhancement (4.0.2)
 

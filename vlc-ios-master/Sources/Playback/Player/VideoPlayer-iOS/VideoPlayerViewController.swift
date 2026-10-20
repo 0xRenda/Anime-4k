@@ -437,6 +437,8 @@ class VideoPlayerViewController: PlayerViewController {
     }()
 
     private func setupAnime4KControl() {
+        mediaNavigationBar.overrideUserInterfaceStyle = .dark
+        mediaScrubProgressBar.overrideUserInterfaceStyle = .dark
         RoxyAppearance.glass(behind: mediaNavigationBar, radius: 22).overrideUserInterfaceStyle = .dark
         RoxyAppearance.glass(behind: mediaScrubProgressBar, radius: 18).overrideUserInterfaceStyle = .dark
         view.addSubview(anime4KButton)
@@ -449,11 +451,12 @@ class VideoPlayerViewController: PlayerViewController {
         mediaNavigationBar.queueButton.setImage(UIImage(systemName: "list.bullet"), for: .normal)
         mediaNavigationBar.mediaTitleTextLabel.font = .systemFont(ofSize: 16, weight: .semibold)
         videoPlayerControls.tintColor = .white
-        mediaScrubProgressBar.tintColor = RoxyAppearance.accent
+        mediaScrubProgressBar.tintColor = RoxyAppearance.playbackAccent
     }
 
     @objc private func openAnime4K() {
         setControlsHidden(false, animated: false)
+        resetIdleTimer()
         RoxyAppearance.presentSettings(from: self)
     }
 #endif

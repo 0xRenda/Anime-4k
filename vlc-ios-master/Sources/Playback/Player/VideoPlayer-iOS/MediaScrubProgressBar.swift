@@ -23,11 +23,19 @@ class MediaScrubProgressBar: UIStackView {
     private(set) var isScrubbing: Bool = false
     var shouldHideScrubLabels: Bool = false
 
+    private var controlAccent: UIColor {
+#if os(iOS)
+        return RoxyAppearance.playbackAccent
+#else
+        return PresentationTheme.current.colors.orangeUI
+#endif
+    }
+
     @objc lazy private(set) var progressSlider: VLCOBSlider = {
         var slider = VLCOBSlider()
         slider.minimumValue = 0
         slider.maximumValue = 1
-        slider.minimumTrackTintColor = PresentationTheme.current.colors.orangeUI
+        slider.minimumTrackTintColor = controlAccent
         slider.maximumTrackTintColor = UIColor(white: 1, alpha: 0.2)
         slider.setThumbImage(UIImage(named: "sliderThumb"), for: .normal)
         slider.setThumbImage(UIImage(named: "sliderThumbBig"), for: .highlighted)
@@ -46,7 +54,7 @@ class MediaScrubProgressBar: UIStackView {
     private lazy var elapsedTimeLabel: UILabel = {
         var label = UILabel()
         label.font = UIFont.preferredCustomFont(forTextStyle: .subheadline).bolded
-        label.textColor = PresentationTheme.current.colors.orangeUI
+        label.textColor = controlAccent
         label.text = "--:--"
         label.numberOfLines = 1
         label.setContentHuggingPriority(.defaultLow, for: .horizontal)
@@ -73,7 +81,7 @@ class MediaScrubProgressBar: UIStackView {
     private lazy var liveLabel: UILabel = {
         let label = UILabel()
         label.font = UIFont.preferredCustomFont(forTextStyle: .subheadline).bolded
-        label.textColor = PresentationTheme.current.colors.orangeUI
+        label.textColor = controlAccent
         label.text = NSLocalizedString("PLAYBACK_LIVE_STREAM", comment: "")
         label.textAlignment = .center
         label.isHidden = true

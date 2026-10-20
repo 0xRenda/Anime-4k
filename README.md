@@ -3,7 +3,10 @@
 An iPhone and iPad player based on the supplied VLC iOS source, with a Metal
 port of the supplied Anime4K shader library.
 
-**Status:** Version **4.0.2** has passed all **15 hosted iOS playback tests**,
+**Status:** Version **4.0.3** adds native-size restoration, a larger High model,
+restoration modes, adaptive recovery and menu/rendering optimizations. Its
+expanded validation is pending the GitHub Actions run. The previous **4.0.2**
+release passed all **15 hosted iOS playback tests**,
 including actual 2× output and rendered 8-bit/10-bit color checks for all three
 presets. The app archive, 49 shaders and independent small-CNN CPU/Metal check
 also passed. Download the IPA from the [successful build](https://github.com/0xRenda/Anime-4k/actions/runs/39394555839).
@@ -57,8 +60,19 @@ Anime4K card at the top of Settings. Enable upscaling and choose Auto, Low,
 Medium or High during playback. **Original / Anime4K** compares the same frame
 without seeking or reopening. The panel reports input and processed resolution,
 pass count and GPU time; the optional overlay shows processing status.
-Individual advanced shaders replace the preset chain. Auto skips enhancement
-when the video already meets the display resolution.
+Choose **Standard** restoration for most anime, **Soft** for aliased sources,
+or **Strong** for an extra restoration stage when Medium/High enlarges by at
+least 2× in both dimensions. High uses the larger VL restoration model and
+holds the selected model size; Auto can lower and recover quality with GPU
+load. Medium/High also restore native-size video. Highlight clamping limits
+ringing. Individual advanced shaders replace the preset chain.
+
+For an M5 iPad, start with **High + Standard**, then compare the same paused
+frame against Original. Use Strong for smaller sources that need at least 2×
+enlargement. The panel shows the actual processed resolution and GPU time;
+source FPS and skipped frames help identify playback pressure. This is regular
+Metal compute, with thermal and memory protection; M5 tensor acceleration and
+hardware decoding in the enhanced path are not implemented.
 
 The player controls and menus use glass surfaces, with native Liquid Glass on
 iOS 26+ and material fallbacks on iOS 15–25. Appearance follows light/dark mode
@@ -67,8 +81,8 @@ and Reduce Transparency. No unreleased iOS SDK is required.
 | Quality | Shader chain | Intended starting point |
 | --- | --- | --- |
 | Low | CNN x2 S | Older devices, battery saving |
-| Medium | Restore CNN S → CNN x2 M | Recent iPhones and midrange iPads |
-| High | Restore CNN L → CNN x2 VL | Powerful iPads and manual quality testing |
+| Medium | Highlight clamp + Restore CNN S → CNN x2 M | Recent iPhones and midrange iPads |
+| High | Highlight clamp + Restore CNN VL → CNN x2 VL | Powerful iPads and manual quality testing |
 | Automatic | Selects one of the above | Uses GPU capability and memory; thermal backoff applies |
 
 The algorithm uses the **GPU through Metal**. VLC decoding and frame copies use

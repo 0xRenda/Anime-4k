@@ -10935,11 +10935,13 @@
       "Anime4K_Upscale_CNN_x2_S"
     ],
     "medium": [
+      "Anime4K_Clamp_Highlights",
       "Anime4K_Restore_CNN_S",
       "Anime4K_Upscale_CNN_x2_M"
     ],
     "high": [
-      "Anime4K_Restore_CNN_L",
+      "Anime4K_Clamp_Highlights",
+      "Anime4K_Restore_CNN_VL",
       "Anime4K_Upscale_CNN_x2_VL"
     ]
   }
