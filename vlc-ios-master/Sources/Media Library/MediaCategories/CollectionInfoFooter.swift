@@ -45,7 +45,7 @@ class CollectionInfoFooter: UICollectionReusableView {
     }()
 
     private lazy var iconImageView: UIImageView = {
-        let icon = UIImage(named: "LaunchCone")?.withRenderingMode(.alwaysTemplate)
+        let icon = UIImage(systemName: "play.square.stack.fill")
         let iconImageView = UIImageView(image: icon)
         iconImageView.contentMode = .scaleAspectFit
         iconImageView.tintColor = PresentationTheme.current.colors.cellDetailTextColor

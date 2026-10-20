@@ -420,17 +420,25 @@
 
 - (void)testVisibleAnime4KButtonOpensGlassSettings
 {
+    UIWindow *window = [(VLCAppDelegate *)UIApplication.sharedApplication.delegate window];
+    XCTAssertTrue([self waitUntil:^BOOL { return window.rootViewController.presentedViewController == nil; } seconds:10]);
+    [NSRunLoop.mainRunLoop runUntilDate:[NSDate dateWithTimeIntervalSinceNow:0.5]];
+    [self saveWindow:window name:@"roxy-library"];
     [NSUserDefaults.standardUserDefaults setBool:YES forKey:@"RoxyAnime4KEnabled"];
     [NSUserDefaults.standardUserDefaults setObject:@"low" forKey:@"RoxyAnime4KQuality"];
     NSURL *url = [[NSBundle bundleForClass:self.class] URLForResource:@"bars-8bit" withExtension:@"mkv"];
     [UIApplication.sharedApplication.delegate application:UIApplication.sharedApplication openURL:url options:@{}];
     [self assertPlaying:url];
-    UIWindow *window = [(VLCAppDelegate *)UIApplication.sharedApplication.delegate window];
     __block UIButton *button = nil;
     XCTAssertTrue([self waitUntil:^BOOL {
         button = (UIButton *)[self findView:window identifier:@"roxy.anime4k.open"];
         return button.window != nil && button.alpha > 0;
     } seconds:10]);
+    XCTAssertTrue([self waitUntil:^BOOL {
+        UIViewController *player = window.rootViewController.presentedViewController;
+        return player != nil && !player.isBeingPresented && !player.isBeingDismissed;
+    } seconds:10]);
+    [NSRunLoop.mainRunLoop runUntilDate:[NSDate dateWithTimeIntervalSinceNow:0.6]];
     [self saveWindow:window name:@"player-glass"];
     [button sendActionsForControlEvents:UIControlEventTouchUpInside];
     XCTAssertTrue([self waitUntil:^BOOL { return [self findView:window identifier:@"roxy.anime4k.quality"] != nil; } seconds:10]);

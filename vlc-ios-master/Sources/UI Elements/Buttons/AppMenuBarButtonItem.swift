@@ -19,7 +19,7 @@ class AppMenuBarButtonItem: UIBarButtonItem {
         self.presenter = presenter
         super.init()
 
-        image = UIImage(named: "MenuCone")
+        image = UIImage(systemName: "play.square.stack.fill")
         accessibilityLabel = NSLocalizedString("Settings", comment: "")
         accessibilityIdentifier = VLCAccessibilityIdentifier.settings
 
@@ -54,8 +54,14 @@ class AppMenuBarButtonItem: UIBarButtonItem {
         }
         settings.accessibilityIdentifier = VLCAccessibilityIdentifier.openSettings
 
-        let settingsSection = UIMenu(title: "", options: .displayInline, children: [settings])
-        return UIMenu(title: "", children: [about, documentation, donation, settingsSection])
+        let anime = UIAction(title: "Anime4K", image: UIImage(systemName: "sparkles")) { [weak self] _ in
+            guard let presenter = self?.presenter else { return }
+            RoxyAppearance.presentSettings(from: presenter)
+        }
+        about.title = "About Roxy Player"
+        about.image = UIImage(systemName: "info.circle")
+        let settingsSection = UIMenu(title: "", options: .displayInline, children: [anime, settings])
+        return UIMenu(title: "Roxy Player", children: [settingsSection, about, documentation, donation])
     }
 
     private func showAbout() {

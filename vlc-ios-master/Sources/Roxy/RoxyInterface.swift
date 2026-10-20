@@ -57,6 +57,23 @@ final class RoxyGlassView: UIVisualEffectView {
     required init?(coder: NSCoder) { return nil }
 }
 
+@objc(RoxyLibraryStyle)
+final class RoxyLibraryStyle: NSObject {
+    @objc(decorateEmptyView:content:)
+    static func decorate(_ view: UIView, content: UIView) {
+        let glass = RoxyGlassView(radius: 32)
+        glass.isUserInteractionEnabled = false
+        glass.translatesAutoresizingMaskIntoConstraints = false
+        view.insertSubview(glass, belowSubview: content)
+        NSLayoutConstraint.activate([
+            glass.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: -16),
+            glass.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: 16),
+            glass.topAnchor.constraint(equalTo: content.topAnchor, constant: -24),
+            glass.bottomAnchor.constraint(equalTo: content.bottomAnchor, constant: 24)
+        ])
+    }
+}
+
 @objc(RoxyAnime4KSettingsController)
 final class RoxyAnime4KSettingsController: UIViewController {
     private let defaults = UserDefaults.standard

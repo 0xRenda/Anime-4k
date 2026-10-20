@@ -15,6 +15,7 @@
 #import "VLCEmptyLibraryView.h"
 #import "VLCFirstStepsViewController.h"
 #import "VLC-Swift.h"
+#import "VLCDocumentPickerController.h"
 
 @implementation VLCEmptyLibraryView
 
@@ -23,21 +24,46 @@
     _emptyLibraryLabel.text = NSLocalizedString(@"EMPTY_LIBRARY", nil);
     _emptyLibraryLongDescriptionLabel.text = NSLocalizedString(@"EMPTY_LIBRARY_LONG", nil);
     [_learnMoreButton setTitle:NSLocalizedString(@"BUTTON_LEARN_MORE", nil) forState:UIControlStateNormal];
+#if TARGET_OS_IOS
+    [RoxyLibraryStyle decorateEmptyView:self content:_iconView.superview];
+    _emptyLibraryLabel.font = [UIFont preferredFontForTextStyle:UIFontTextStyleTitle1];
+    _emptyLibraryLabel.adjustsFontForContentSizeCategory = YES;
+    _emptyLibraryLongDescriptionLabel.font = [UIFont preferredFontForTextStyle:UIFontTextStyleBody];
+    _emptyLibraryLongDescriptionLabel.adjustsFontForContentSizeCategory = YES;
+    _learnMoreButton.accessibilityIdentifier = @"roxy.library.open";
+    UIButtonConfiguration *configuration = [UIButtonConfiguration filledButtonConfiguration];
+    configuration.title = @"Open Files";
+    configuration.image = [UIImage systemImageNamed:@"folder"];
+    configuration.imagePadding = 10;
+    configuration.cornerStyle = UIButtonConfigurationCornerStyleCapsule;
+    configuration.contentInsets = NSDirectionalEdgeInsetsMake(14, 24, 14, 24);
+    _learnMoreButton.configuration = configuration;
+#endif
     
     [[NSNotificationCenter defaultCenter] addObserver:self
                                              selector:@selector(themeDidChange)
                                                  name:kVLCThemeDidChangeNotification
                                                object:nil];
     [self themeDidChange];
+#if TARGET_OS_IOS
+    [self setContentType:_contentType];
+#endif
     [super awakeFromNib];
 }
 
 - (IBAction)learnMore:(id)sender
 {
+#if TARGET_OS_IOS
+      UIViewController *presenter = self.window.rootViewController;
+      while (presenter.presentedViewController) presenter = presenter.presentedViewController;
+      NSURL *documents = [NSFileManager.defaultManager URLsForDirectory:NSDocumentDirectory inDomains:NSUserDomainMask].firstObject;
+      [[[VLCDocumentPickerController alloc] init] presentFromViewController:presenter initialDirectory:documents];
+#else
       UIViewController *firstStepsVC = [[VLCFirstStepsViewController alloc] initWithNibName:nil bundle:nil];
       UINavigationController *navCon = [[UINavigationController alloc] initWithRootViewController:firstStepsVC];
       navCon.modalPresentationStyle = UIModalPresentationFormSheet;
       [self.window.rootViewController presentViewController:navCon animated:YES completion:nil];
+#endif
 }
 
 - (void)themeDidChange
@@ -48,11 +74,24 @@
     _emptyLibraryLabel.backgroundColor = colors.background;
     _emptyLibraryLongDescriptionLabel.textColor = colors.lightTextColor;
     _emptyLibraryLongDescriptionLabel.backgroundColor = colors.background;
+#if TARGET_OS_IOS
+    self.backgroundColor = colors.pageBackground;
+    _emptyLibraryLabel.backgroundColor = UIColor.clearColor;
+    _emptyLibraryLongDescriptionLabel.backgroundColor = UIColor.clearColor;
+    _iconView.image = [UIImage systemImageNamed:@"play.square.stack.fill"];
+    _iconView.contentMode = UIViewContentModeScaleAspectFit;
+    _iconView.tintColor = colors.orangeUI;
+    UIButtonConfiguration *configuration = _learnMoreButton.configuration;
+    configuration.baseBackgroundColor = colors.orangeUI;
+    _learnMoreButton.configuration = configuration;
+    _learnMoreButton.tintColor = colors.orangeUI;
+#else
     if (colors.isDark) {
         _iconView.image = [UIImage imageNamed:@"VLCCone26-dark-512x512"];
     } else {
         _iconView.image = [UIImage imageNamed:@"VLCCone26-512x512"];
     }
+#endif
 }
 
 - (void)setContentType:(VLCEmptyLibraryViewContentType)contentType
@@ -100,6 +139,13 @@
     }
     _emptyLibraryLabel.text = title;
     _emptyLibraryLongDescriptionLabel.text = description;
+#if TARGET_OS_IOS
+    if (contentType == VLCEmptyLibraryViewContentTypeVideo || contentType == VLCEmptyLibraryViewContentTypeAudio) {
+        _emptyLibraryLabel.text = @"Welcome to Roxy";
+        _emptyLibraryLongDescriptionLabel.text = @"Your videos, beautifully played.\nOpen a file to begin, then tap Anime4K for sharper anime.";
+        [_learnMoreButton setTitle:@"Open Files" forState:UIControlStateNormal];
+    }
+#endif
 }
 
 @end

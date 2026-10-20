@@ -14,7 +14,7 @@ import UIKit
 class PulsingConeView: UIView {
 
     private let coneImageView: UIImageView = {
-        let cone = UIImage(named: "LaunchCone") ?? UIImage(named: "cone")
+        let cone = UIImage(systemName: "play.circle.fill")
         let coneImageView = UIImageView(image: cone?.withRenderingMode(.alwaysTemplate))
         coneImageView.contentMode = .scaleAspectFit
         coneImageView.translatesAutoresizingMaskIntoConstraints = false
