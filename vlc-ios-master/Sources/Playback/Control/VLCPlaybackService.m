@@ -1778,15 +1778,20 @@ static const float kVLCPlaybackRateMaximum = 8.0f;
 #if !TARGET_OS_WATCH
 - (void)setVideoOutputView:(UIView *)videoOutputView
 {
-    dispatch_async(dispatch_get_main_queue(), ^{
+    if (!NSThread.isMainThread) {
+        dispatch_async(dispatch_get_main_queue(), ^{ self.videoOutputView = videoOutputView; });
+        return;
+    }
+    // Metadata refreshes can assign the same output repeatedly. Removing it
+    // even briefly discards paused frames and races a new presentation.
+    _videoOutputViewWrapper = videoOutputView;
         if (videoOutputView) {
             [videoOutputView.superview layoutIfNeeded];
-            if ([self->_actualVideoOutputView superview] != nil)
-                [self->_actualVideoOutputView removeFromSuperview];
-
             self->_actualVideoOutputView.frame = videoOutputView.bounds;
-
-            [videoOutputView addSubview:self->_actualVideoOutputView];
+            if (self->_actualVideoOutputView.superview != videoOutputView) {
+                [self->_actualVideoOutputView removeFromSuperview];
+                [videoOutputView addSubview:self->_actualVideoOutputView];
+            }
 #if TARGET_OS_IOS
             self->_roxyVideoOutput.view.frame = self->_actualVideoOutputView.bounds;
 #endif
@@ -1796,8 +1801,6 @@ static const float kVLCPlaybackRateMaximum = 8.0f;
         } else
             [self->_actualVideoOutputView removeFromSuperview];
 
-        self->_videoOutputViewWrapper = videoOutputView;
-    });
 }
 
 - (UIView *)videoOutputView

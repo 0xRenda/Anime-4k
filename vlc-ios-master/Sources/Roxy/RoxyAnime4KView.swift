@@ -40,7 +40,8 @@ final class RoxyVideoFrameQueue: NSObject {
     func setActive(_ value: Bool) {
         lock.lock()
         active = value
-        if !value { frame = nil }
+        // A paused video must survive a view transition or foreground return.
+        // Keep one bounded latest frame; inactive queues still reject new ones.
         lock.unlock()
     }
 }

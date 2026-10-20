@@ -1356,7 +1356,7 @@ extension VideoPlayerViewController {
     }
 
     private func updateAudioInterface(with metadata: VLCMetaData) {
-        if metadata.isAudioOnly || playbackService.playAsAudio {
+        if (metadata.isAudioOnly && playbackService.numberOfVideoTracks == 0) || playbackService.playAsAudio {
             // Only update the artwork image when the media is being played
             if playbackService.isPlaying {
                 let artworkImage = metadata.artworkImage

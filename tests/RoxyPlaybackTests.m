@@ -378,18 +378,20 @@
     XCTAssertTrue([self waitUntil:^BOOL {
         UIView *view = self.animeView;
         unsigned long long sequence = [[[view valueForKey:@"frames"] valueForKey:@"receivedFrameCount"] unsignedLongLongValue];
-        return sequence > 0 && (view != previousView || sequence > previousSequence);
+        UIViewController *player = [(VLCAppDelegate *)UIApplication.sharedApplication.delegate window].rootViewController.presentedViewController;
+        return view.window != nil && player != nil && !player.isBeingPresented && !player.isBeingDismissed &&
+            sequence > 0 && (view != previousView || sequence > previousSequence);
     } seconds:15], @"Each codec must deliver a new frame; a previous video's picture cannot pass this test");
     // Hold an actual delivered frame while the host prepares all pipelines.
     // Otherwise this 12-second fixture can end before a cold simulator compiler.
     [service pause];
+    XCTAssertTrue([self waitUntil:^BOOL { return service.mediaPlayerState == VLCMediaPlayerStatePaused; } seconds:10]);
     for (NSString *quality in @[@"low", @"medium", @"high"]) {
         [defaults setObject:quality forKey:@"RoxyAnime4KQuality"];
         XCTAssertTrue([self waitUntil:^BOOL {
             NSDictionary *metrics = service.anime4KRenderMetrics;
-            return [metrics[@"passes"] intValue] > 0 && [metrics[@"quality"] isEqual:quality];
+            return self.animeView.window != nil && [metrics[@"passes"] intValue] > 0 && [metrics[@"quality"] isEqual:quality];
         } seconds:60], @"%@ failed to run %@: %@", name, quality, service.anime4KRenderMetrics);
-        if (service.isPlaying) [service pause];
         NSDictionary *metrics = service.anime4KRenderMetrics;
         XCTAssertEqual([metrics[@"inputWidth"] intValue], 128);
         XCTAssertEqual([metrics[@"outputWidth"] intValue], 256, @"The CNN must actually double the resolution");
@@ -417,7 +419,9 @@
     [self assertPlaying:url];
     [service.playerDisplayController showFullscreenPlayback];
     XCTAssertTrue([self waitUntil:^BOOL {
-        return service.videoOutputView.window != nil && service.videoOutputView.bounds.size.width > 0;
+        UIViewController *player = [(VLCAppDelegate *)UIApplication.sharedApplication.delegate window].rootViewController.presentedViewController;
+        return player != nil && !player.isBeingPresented && !player.isBeingDismissed &&
+            service.videoOutputView.window != nil && service.videoOutputView.bounds.size.width > 0;
     } seconds:10], @"Start with the same visible player from which a user opens Anime4K settings");
     void (^originalCompletion)(BOOL) = [service valueForKey:@"playbackCompletion"];
     [service setValue:[^(BOOL success) {
