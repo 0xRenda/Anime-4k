@@ -380,6 +380,9 @@
         unsigned long long sequence = [[[view valueForKey:@"frames"] valueForKey:@"receivedFrameCount"] unsignedLongLongValue];
         return sequence > 0 && (view != previousView || sequence > previousSequence);
     } seconds:15], @"Each codec must deliver a new frame; a previous video's picture cannot pass this test");
+    // Hold an actual delivered frame while the host prepares all pipelines.
+    // Otherwise this 12-second fixture can end before a cold simulator compiler.
+    [service pause];
     for (NSString *quality in @[@"low", @"medium", @"high"]) {
         [defaults setObject:quality forKey:@"RoxyAnime4KQuality"];
         XCTAssertTrue([self waitUntil:^BOOL {
