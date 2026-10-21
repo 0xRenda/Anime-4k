@@ -269,7 +269,6 @@ NSString *const VLCPlayerDisplayControllerHideMiniPlayer = @"VLCPlayerDisplayCon
         ((VLCVideoPlayerViewController *)_movieViewController).delegate = self;
         [((VLCVideoPlayerViewController *)_movieViewController) setupQueueViewControllerWithQvc:_queueViewController];
 #endif
-        self.playbackController.delegate = _movieViewController;
         if (!_queueViewController) {
             [self initQueueViewController];
         }
@@ -300,7 +299,6 @@ NSString *const VLCPlayerDisplayControllerHideMiniPlayer = @"VLCPlayerDisplayCon
 #endif
         [((VLCAudioPlayerViewController *)_audioPlayerViewController) setupQueueViewControllerWith:_queueViewController];
         ((VLCAudioPlayerViewController *) _audioPlayerViewController).delegate = self;
-        self.playbackController.delegate = _audioPlayerViewController;
     }
 
     return _audioPlayerViewController;
@@ -517,23 +515,34 @@ NSString *const VLCPlayerDisplayControllerHideMiniPlayer = @"VLCPlayerDisplayCon
 - (void)_presentFullscreenPlaybackViewIfNeeded
 {
     NSUInteger generation = ++self.roxyPresentationGeneration;
+    VLCMedia *media = self.playbackController.currentlyPlayingMedia;
     dispatch_async(dispatch_get_main_queue(), ^{
-        [self _presentPlaybackController:self.movieViewController audio:NO generation:generation];
+        [self _presentPlaybackController:self.movieViewController audio:NO generation:generation media:media];
     });
 }
 
 -(void)_presentAudioPlayerViewIfNeeded
 {
     NSUInteger generation = ++self.roxyPresentationGeneration;
+    VLCMedia *media = self.playbackController.currentlyPlayingMedia;
     dispatch_async(dispatch_get_main_queue(), ^{
-        [self _presentPlaybackController:self.audioPlayerViewController audio:YES generation:generation];
+        [self _presentPlaybackController:self.audioPlayerViewController audio:YES generation:generation media:media];
     });
 }
 
-- (void)_presentPlaybackController:(UIViewController *)controller audio:(BOOL)audio generation:(NSUInteger)generation
+- (void)_presentPlaybackController:(UIViewController *)controller audio:(BOOL)audio generation:(NSUInteger)generation media:(VLCMedia *)media
 {
     if (generation != self.roxyPresentationGeneration ||
+        !media || media != self.playbackController.currentlyPlayingMedia || !self.playbackController.playerIsSetup ||
         self.displayMode != VLCPlayerDisplayControllerDisplayModeFullscreen) return;
+
+    // Audio/video discovery can finish while UIKit is presenting the player.
+    // A confirmed video track overrides an earlier audio hint, except an explicit audio-only request.
+    if (audio && !self.playbackController.playAsAudio &&
+        (self.playbackController.numberOfVideoTracks > 0 || media.videoTracks.count > 0)) {
+        [self _presentFullscreenPlaybackViewIfNeeded];
+        return;
+    }
 
     UIViewController *container = [self _presentingControllerForPlaybackController:controller];
     UIWindow *window = [[[UIApplication sharedApplication] delegate] window];
@@ -542,7 +551,7 @@ NSString *const VLCPlayerDisplayControllerHideMiniPlayer = @"VLCPlayerDisplayCon
         // Opening during the previous player's dismissal must not be dropped.
         // UIKit clears its presenting relationships only after the transition.
         void (^retry)(void) = ^{
-            [self _presentPlaybackController:controller audio:audio generation:generation];
+            [self _presentPlaybackController:controller audio:audio generation:generation media:media];
         };
         id<UIViewControllerTransitionCoordinator> coordinator = container.transitionCoordinator ?: presented.transitionCoordinator;
         if (coordinator && [coordinator animateAlongsideTransition:nil completion:^(id<UIViewControllerTransitionCoordinatorContext> context) {
@@ -600,6 +609,7 @@ NSString *const VLCPlayerDisplayControllerHideMiniPlayer = @"VLCPlayerDisplayCon
     UINavigationController *navCon = [[VLCPlaybackNavigationController alloc] initWithRootViewController:movieViewController];
     navCon.modalPresentationStyle = UIModalPresentationOverFullScreen;
     navCon.modalPresentationCapturesStatusBarAppearance = YES;
+    self.playbackController.delegate = movieViewController;
     [movieViewController prepareForMediaPlayback:self.playbackController];
 
     [rootViewController presentViewController:navCon animated:animated completion:^{
@@ -645,6 +655,35 @@ NSString *const VLCPlayerDisplayControllerHideMiniPlayer = @"VLCPlayerDisplayCon
 
 - (void)_swapPlaybackRootTo:(UIViewController<VLCPlaybackServiceDelegate> *)target
 {
+    VLCMedia *media = self.playbackController.currentlyPlayingMedia;
+    if (!media || !self.playbackController.playerIsSetup) return;
+    // Reject an unsupported audio hint before it can cancel a valid video presentation.
+    if (target == _audioPlayerViewController && ![self _roxyHasConfirmedAudioForMedia:media]) return;
+    NSUInteger generation = ++self.roxyPresentationGeneration;
+    [self _swapPlaybackRootTo:target forMedia:media generation:generation];
+}
+
+- (BOOL)_roxyHasConfirmedAudioForMedia:(VLCMedia *)media
+{
+    VLCPlaybackService *service = self.playbackController;
+    if (!media || media != service.currentlyPlayingMedia) return NO;
+    if (service.playAsAudio) return YES;
+    if (service.numberOfVideoTracks > 0 || media.videoTracks.count > 0) return NO;
+    if (service.expectsAudioOnlyContent) return YES;
+    VLCMLMedia *libraryMedia = service.currentlyPlayingLibraryMedia;
+    if (libraryMedia && !libraryMedia.isExternalMedia && libraryMedia.type == VLCMLMediaTypeAudio) return YES;
+    // An empty player track list while opening is unknown, not proof of audio-only content.
+    return media.parsedStatus == VLCMediaParsedStatusDone && media.audioTracks.count > 0;
+}
+
+- (void)_swapPlaybackRootTo:(UIViewController<VLCPlaybackServiceDelegate> *)target
+                  forMedia:(VLCMedia *)media generation:(NSUInteger)generation
+{
+    if (generation != self.roxyPresentationGeneration || !media ||
+        media != self.playbackController.currentlyPlayingMedia || !self.playbackController.playerIsSetup ||
+        self.displayMode != VLCPlayerDisplayControllerDisplayModeFullscreen) return;
+    if (target == _audioPlayerViewController && ![self _roxyHasConfirmedAudioForMedia:media]) return;
+
     UIWindow *window = [[[UIApplication sharedApplication] delegate] window];
     UIViewController *presented = window.rootViewController.presentedViewController;
 
@@ -664,7 +703,7 @@ NSString *const VLCPlayerDisplayControllerHideMiniPlayer = @"VLCPlayerDisplayCon
     if (navCon.isBeingPresented || navCon.isBeingDismissed) {
         dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.1 * NSEC_PER_SEC)),
                        dispatch_get_main_queue(), ^{
-            [self _swapPlaybackRootTo:target];
+            [self _swapPlaybackRootTo:target forMedia:media generation:generation];
         });
         return;
     }

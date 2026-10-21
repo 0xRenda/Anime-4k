@@ -1289,21 +1289,11 @@ extension VideoPlayerViewController {
             resetABRepeat()
         }
 
-        let media = playbackService.currentlyPlayingLibraryMedia
-        if let media = media, currentState == .opening &&
-            (media.type() == .audio && playbackService.numberOfVideoTracks == 0),
+        if (currentState == .opening || currentState == .playing || currentState == .paused),
+           hasConfirmedAudioOnlyContent(for: playbackService),
            presentingViewController != nil {
-            // This media is audio only and can be played with the Audio Player.
-            delegate?.videoPlayerViewControllerShouldSwitchPlayer(self)
-            return
-        }
-
-        if media == nil || media?.isExternalMedia() == true,
-           currentState == .playing,
-           playbackService.numberOfVideoTracks == 0,
-           !playbackService.playAsAudio,
-           presentingViewController != nil {
-            // This stream turned out to be audio only and can be played with the Audio Player.
+            // The first Playing event can precede HEVC track discovery. Only
+            // positive audio evidence may replace the video controller.
             delegate?.videoPlayerViewControllerShouldSwitchPlayer(self)
             return
         }
@@ -1339,6 +1329,12 @@ extension VideoPlayerViewController {
             return
         }
 
+        if (playbackService.mediaPlayerState == .playing || playbackService.mediaPlayerState == .paused),
+           hasConfirmedAudioOnlyContent(for: playbackService), presentingViewController != nil {
+            delegate?.videoPlayerViewControllerShouldSwitchPlayer(self)
+            return
+        }
+
         mediaNavigationBar.setMediaTitleLabelText(metadata.title)
         updateFavoriteButton()
         mediaScrubProgressBar.updateLiveStreamState()
@@ -1358,8 +1354,18 @@ extension VideoPlayerViewController {
         videoPlayerButtons()
     }
 
+    private func hasConfirmedAudioOnlyContent(for service: PlaybackService) -> Bool {
+        if service.playAsAudio { return true }
+        guard let media = service.currentlyPlayingMedia, service.numberOfVideoTracks == 0,
+              media.videoTracks.isEmpty else { return false }
+        if service.expectsAudioOnlyContent { return true }
+        if let libraryMedia = service.currentlyPlayingLibraryMedia,
+           !libraryMedia.isExternalMedia(), libraryMedia.type() == .audio { return true }
+        return media.parsedStatus == .done && !media.audioTracks.isEmpty
+    }
+
     private func updateAudioInterface(with metadata: VLCMetaData) {
-        if (metadata.isAudioOnly && playbackService.numberOfVideoTracks == 0) || playbackService.playAsAudio {
+        if hasConfirmedAudioOnlyContent(for: playbackService) {
             // Only update the artwork image when the media is being played
             if playbackService.isPlaying {
                 let artworkImage = metadata.artworkImage

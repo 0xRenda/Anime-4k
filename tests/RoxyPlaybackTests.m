@@ -1,6 +1,7 @@
 // Hosted iOS integration tests: use the actual app URL handler and LibVLC.
 #import <XCTest/XCTest.h>
 #import <UIKit/UIKit.h>
+#import <CoreVideo/CoreVideo.h>
 #import <UniformTypeIdentifiers/UniformTypeIdentifiers.h>
 #import <VLCKit/VLCKit.h>
 #import "VLCPlaybackService.h"
@@ -20,6 +21,24 @@
 @end
 @protocol RoxyPlayerInteraction <NSObject>
 - (void)handleTapOnVideo;
+@end
+@protocol RoxyPausedFrameQueue <NSObject>
+@property (nonatomic) BOOL playbackPaused;
+@property (nonatomic, readonly) unsigned long long receivedFrameCount;
+@property (nonatomic, readonly) unsigned long long duplicatePausedFrameCount;
+- (BOOL)submitPixelBuffer:(CVPixelBufferRef)buffer;
+- (BOOL)isRepeatedPausedFrame:(const void *)bytes width:(NSInteger)width height:(NSInteger)height bytesPerRow:(NSInteger)pitch;
+@end
+@protocol RoxyPlaybackRootSwitching <NSObject>
+- (void)_swapPlaybackRootTo:(UIViewController *)target;
+- (void)_swapPlaybackRootTo:(UIViewController *)target forMedia:(VLCMedia *)media generation:(NSUInteger)generation;
+@end
+
+@interface RoxyStaleRootProbe : UIViewController
+@property (nonatomic) BOOL prepared;
+@end
+@implementation RoxyStaleRootProbe
+- (void)prepareForMediaPlayback:(VLCPlaybackService *)service { self.prepared = YES; }
 @end
 
 @interface RoxyPlaybackTests : XCTestCase
@@ -411,6 +430,110 @@
 - (void)testRendered8BitColorsAndAllThreeUpscalingPresets { [self validateRenderedFixture:@"bars-8bit"]; }
 - (void)testRendered10BitColorsAndAllThreeUpscalingPresets { [self validateRenderedFixture:@"bars-10bit"]; }
 
+- (void)testConfirmedVideoRejectsStaleAudioRootSwitches
+{
+    [NSUserDefaults.standardUserDefaults setBool:YES forKey:@"RoxyAnime4KEnabled"];
+    [NSUserDefaults.standardUserDefaults setObject:@"low" forKey:@"RoxyAnime4KQuality"];
+    NSURL *url = [[NSBundle bundleForClass:self.class] URLForResource:@"bars-10bit" withExtension:@"mkv"];
+    [UIApplication.sharedApplication.delegate application:UIApplication.sharedApplication openURL:url options:@{}];
+    [self assertPlaying:url];
+    VLCPlaybackService *service = VLCPlaybackService.sharedInstance;
+    VLCPlayerDisplayController *display = service.playerDisplayController;
+    [display showFullscreenPlayback];
+    UIWindow *window = [(VLCAppDelegate *)UIApplication.sharedApplication.delegate window];
+    UIViewController *movie = display.videoPlayerViewController;
+    XCTAssertTrue([self waitUntil:^BOOL {
+        UINavigationController *navigation = (UINavigationController *)window.rootViewController.presentedViewController;
+        return [navigation isKindOfClass:UINavigationController.class] && navigation.topViewController == movie &&
+            !navigation.isBeingPresented && !navigation.isBeingDismissed && self.animeView.window == window &&
+            service.numberOfVideoTracks > 0 && [service.anime4KRenderMetrics[@"passes"] intValue] > 0;
+    } seconds:30], @"The regression must start with confirmed visible HEVC video: %@", service.anime4KRenderMetrics);
+    UIView *video = self.animeView;
+    id delegate = service.delegate;
+    id<RoxyPlaybackRootSwitching> switching = (id<RoxyPlaybackRootSwitching>)display;
+    NSUInteger generation = [[display valueForKey:@"roxyPresentationGeneration"] unsignedIntegerValue];
+    RoxyStaleRootProbe *probe = [RoxyStaleRootProbe new];
+    [switching _swapPlaybackRootTo:probe forMedia:service.currentlyPlayingMedia generation:generation + 1];
+    XCTAssertFalse(probe.prepared, @"An obsolete presentation generation must not prepare or replace a player root");
+    NSURL *otherURL = [[NSBundle bundleForClass:self.class] URLForResource:@"shared" withExtension:@"mp4"];
+    [switching _swapPlaybackRootTo:probe forMedia:[VLCMedia mediaWithURL:otherURL] generation:generation];
+    XCTAssertFalse(probe.prepared, @"A callback for another media must not prepare or replace the current player root");
+
+    UIViewController *audio = [display valueForKey:@"audioPlayerViewController"];
+    XCTAssertEqual(service.delegate, delegate, @"Creating an inactive audio controller must not take playback ownership");
+    [switching _swapPlaybackRootTo:audio];
+    UINavigationController *navigation = (UINavigationController *)window.rootViewController.presentedViewController;
+    XCTAssertEqual(navigation.topViewController, movie, @"A stale audio classification must not replace confirmed video");
+    XCTAssertEqual(service.delegate, delegate);
+    XCTAssertEqual(self.animeView, video);
+    XCTAssertEqual(video.window, window, @"Rejecting a stale root swap must preserve the visible Metal renderer");
+}
+
+- (void)testPausedFrameQueueDropsExactDuplicatesAndAcceptsChangedPixels
+{
+    id<RoxyPausedFrameQueue> queue = [NSClassFromString(@"RoxyVideoFrameQueue") new];
+    XCTAssertNotNil(queue);
+    CVPixelBufferRef (^makeBuffer)(size_t, size_t, uint8_t) = ^CVPixelBufferRef(size_t width, size_t height, uint8_t padding) {
+        CVPixelBufferRef buffer = NULL;
+        NSDictionary *attributes = @{(id)kCVPixelBufferBytesPerRowAlignmentKey: @64};
+        CVReturn result = CVPixelBufferCreate(kCFAllocatorDefault, width, height, kCVPixelFormatType_32BGRA,
+                                              (__bridge CFDictionaryRef)attributes, &buffer);
+        XCTAssertEqual(result, kCVReturnSuccess);
+        XCTAssertNotEqual(buffer, NULL);
+        XCTAssertEqual(CVPixelBufferLockBaseAddress(buffer, 0), kCVReturnSuccess);
+        size_t stride = CVPixelBufferGetBytesPerRow(buffer);
+        XCTAssertGreaterThan(stride, width * 4, @"This fixture must exercise non-image row padding");
+        uint8_t *bytes = CVPixelBufferGetBaseAddress(buffer);
+        memset(bytes, padding, stride * height);
+        for (size_t y = 0; y < height; y++) {
+            for (size_t x = 0; x < width; x++) {
+                const uint8_t pixel[4] = {16, 64, 144, 255};
+                memcpy(bytes + y * stride + x * 4, pixel, 4);
+            }
+        }
+        CVPixelBufferUnlockBaseAddress(buffer, 0);
+        return buffer;
+    };
+    // Distinct allocations deliberately differ in row-padding bytes. Only the
+    // visible BGRA picture identifies a repeated paused vmem redraw.
+    CVPixelBufferRef first = makeBuffer(3, 2, 0x11);
+    CVPixelBufferRef duplicate = makeBuffer(3, 2, 0x22);
+    CVPixelBufferRef changedDuplicate = makeBuffer(3, 2, 0x44);
+    CVPixelBufferRef resized = makeBuffer(4, 2, 0x33);
+    queue.playbackPaused = YES;
+    XCTAssertTrue([queue submitPixelBuffer:first]);
+    XCTAssertEqual(queue.receivedFrameCount, 1u);
+    XCTAssertEqual(CVPixelBufferLockBaseAddress(duplicate, kCVPixelBufferLock_ReadOnly), kCVReturnSuccess);
+    XCTAssertTrue([queue isRepeatedPausedFrame:CVPixelBufferGetBaseAddress(duplicate) width:3 height:2
+                                      bytesPerRow:CVPixelBufferGetBytesPerRow(duplicate)]);
+    CVPixelBufferUnlockBaseAddress(duplicate, kCVPixelBufferLock_ReadOnly);
+    XCTAssertFalse([queue submitPixelBuffer:duplicate]);
+    XCTAssertEqual(queue.receivedFrameCount, 1u, @"Paused replay must not advance the decoder input sequence");
+
+    XCTAssertEqual(CVPixelBufferLockBaseAddress(duplicate, 0), kCVReturnSuccess);
+    uint8_t *changed = CVPixelBufferGetBaseAddress(duplicate);
+    changed[CVPixelBufferGetBytesPerRow(duplicate) + 4] += 1;
+    CVPixelBufferUnlockBaseAddress(duplicate, 0);
+    XCTAssertEqual(CVPixelBufferLockBaseAddress(changedDuplicate, 0), kCVReturnSuccess);
+    uint8_t *sameChanged = CVPixelBufferGetBaseAddress(changedDuplicate);
+    sameChanged[CVPixelBufferGetBytesPerRow(changedDuplicate) + 4] += 1;
+    CVPixelBufferUnlockBaseAddress(changedDuplicate, 0);
+    XCTAssertTrue([queue submitPixelBuffer:duplicate], @"A single changed visible pixel during pause or seek must reach the renderer");
+    XCTAssertEqual(queue.receivedFrameCount, 2u);
+    XCTAssertFalse([queue submitPixelBuffer:changedDuplicate]);
+    XCTAssertEqual(queue.receivedFrameCount, 2u);
+    XCTAssertTrue([queue submitPixelBuffer:resized], @"A changed video format must not be mistaken for a paused replay");
+    XCTAssertEqual(queue.receivedFrameCount, 3u);
+    XCTAssertGreaterThanOrEqual(queue.duplicatePausedFrameCount, 2u);
+    queue.playbackPaused = NO;
+    XCTAssertTrue([queue submitPixelBuffer:resized], @"Playing frames retain their timeline even when their pixels match");
+    XCTAssertEqual(queue.receivedFrameCount, 4u);
+    CVPixelBufferRelease(first);
+    CVPixelBufferRelease(duplicate);
+    CVPixelBufferRelease(changedDuplicate);
+    CVPixelBufferRelease(resized);
+}
+
 - (void)testPausedComparisonAndMenuPreferencesReuseEnhancedFrame
 {
     NSUserDefaults *defaults = NSUserDefaults.standardUserDefaults;
@@ -468,6 +591,14 @@
                    @"Capturing an already settled enhanced frame must reuse its CNN output; settled=%@ capture=%@", stableFrame, baseline);
     XCTAssertEqual([baseline[@"cnnFrameCount"] unsignedLongLongValue], count);
     XCTAssertGreaterThan([baseline[@"sourceFPS"] doubleValue], 0);
+    unsigned long long duplicates = [[[self.animeView valueForKey:@"frames"] valueForKey:@"duplicatePausedFrameCount"] unsignedLongLongValue];
+    XCTAssertTrue([self waitUntil:^BOOL {
+        return [[[self.animeView valueForKey:@"frames"] valueForKey:@"duplicatePausedFrameCount"] unsignedLongLongValue] >= duplicates + 2;
+    } seconds:5], @"The real paused VLC vout must exercise repeated-picture suppression");
+    XCTAssertEqual([[self.animeView valueForKey:@"cnnFrameCount"] unsignedLongLongValue], count,
+                   @"Repeated paused VLC displays must not rerun the CNN");
+    XCTAssertEqual([[[self.animeView valueForKey:@"frames"] valueForKey:@"receivedFrameCount"] unsignedLongLongValue],
+                   [baseline[@"inputSequence"] unsignedLongLongValue]);
 
     [defaults setBool:![defaults boolForKey:@"RoxyAnime4KShowStatus"] forKey:@"RoxyAnime4KShowStatus"];
     [defaults setObject:NSUUID.UUID.UUIDString forKey:@"RoxyValidationUnrelatedPreference"];

@@ -61,6 +61,8 @@ final class RoxyVideoFrameQueue: NSObject {
     private var frame: CVPixelBuffer?
     private var sequence: UInt64 = 0
     private var active = true
+    private var paused = false
+    private var duplicatePausedFrames: UInt64 = 0
     private var arrival: CFTimeInterval = 0
     private var interval = 1.0 / 30.0
 
@@ -76,20 +78,90 @@ final class RoxyVideoFrameQueue: NSObject {
         return sequence
     }
 
-    @objc(submitPixelBuffer:)
-    func submit(pixelBuffer: CVPixelBuffer) {
+    @objc var playbackPaused: Bool {
+        get {
+            lock.lock()
+            defer { lock.unlock() }
+            return paused
+        }
+        set {
+            lock.lock()
+            if paused != newValue { arrival = 0 }
+            paused = newValue
+            lock.unlock()
+        }
+    }
+
+    @objc var duplicatePausedFrameCount: UInt64 {
         lock.lock()
-        if active {
-            let now = CACurrentMediaTime()
-            let delta = now - arrival
-            if arrival > 0, delta >= 1.0 / 121.0, delta < 0.25 {
-                interval = interval * 0.9 + delta * 0.1
+        defer { lock.unlock() }
+        return duplicatePausedFrames
+    }
+
+    // VLC's paused vout re-enters prepare/display every 80 ms. Its public vmem
+    // callbacks carry neither the decoded PTS nor a source picture identity.
+    // Compare against our immutable latest frame before allocating or copying
+    // another pool buffer; a paused seek/subtitle change still passes through.
+    @objc(isRepeatedPausedFrame:width:height:bytesPerRow:)
+    func isRepeatedPausedFrame(_ bytes: UnsafeRawPointer, width: Int, height: Int, bytesPerRow: Int) -> Bool {
+        lock.lock()
+        let previous = active && paused ? frame : nil
+        let previousSequence = sequence
+        lock.unlock()
+        guard let previous = previous, width > 0, width <= 8192, height > 0, height <= 8192,
+              bytesPerRow >= width * 4,
+              CVPixelBufferGetPixelFormatType(previous) == kCVPixelFormatType_32BGRA,
+              CVPixelBufferGetWidth(previous) == width, CVPixelBufferGetHeight(previous) == height,
+              CVPixelBufferLockBaseAddress(previous, .readOnly) == kCVReturnSuccess else { return false }
+        defer { CVPixelBufferUnlockBaseAddress(previous, .readOnly) }
+        guard let original = CVPixelBufferGetBaseAddress(previous) else { return false }
+        let originalPitch = CVPixelBufferGetBytesPerRow(previous)
+        // Padding is not image content and may be uninitialized or differ
+        // between the aligned VLC staging buffer and CoreVideo pool buffers.
+        for row in 0..<height {
+            if memcmp(original.advanced(by: row * originalPitch), bytes.advanced(by: row * bytesPerRow), width * 4) != 0 {
+                return false
             }
-            arrival = now
+        }
+        lock.lock()
+        defer { lock.unlock() }
+        // Lifecycle/state or another producer may change while rows are being
+        // compared. Never discard a submission against an obsolete snapshot.
+        guard active, paused, sequence == previousSequence else { return false }
+        duplicatePausedFrames &+= 1
+        return true
+    }
+
+    @objc(submitPixelBuffer:)
+    @discardableResult
+    func submit(pixelBuffer: CVPixelBuffer) -> Bool {
+        // Also enforce the contract for direct queue producers. The VLC bridge
+        // normally rejects duplicates earlier, before its row copy/allocation.
+        if playbackPaused, CVPixelBufferGetPixelFormatType(pixelBuffer) == kCVPixelFormatType_32BGRA,
+           CVPixelBufferLockBaseAddress(pixelBuffer, .readOnly) == kCVReturnSuccess {
+            let repeated = CVPixelBufferGetBaseAddress(pixelBuffer).map {
+                isRepeatedPausedFrame($0, width: CVPixelBufferGetWidth(pixelBuffer),
+                    height: CVPixelBufferGetHeight(pixelBuffer), bytesPerRow: CVPixelBufferGetBytesPerRow(pixelBuffer))
+            } ?? false
+            CVPixelBufferUnlockBaseAddress(pixelBuffer, .readOnly)
+            if repeated { return false }
+        }
+        lock.lock()
+        defer { lock.unlock() }
+        if active {
+            if !paused {
+                let now = CACurrentMediaTime()
+                let delta = now - arrival
+                if arrival > 0, delta >= 1.0 / 121.0, delta < 0.25 {
+                    interval = interval * 0.9 + delta * 0.1
+                }
+                arrival = now
+            }
             frame = pixelBuffer
             sequence &+= 1
+            return true
         }
-        lock.unlock()
+        return false
     }
 
     func snapshot() -> (CVPixelBuffer?, UInt64, Double) {

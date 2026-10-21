@@ -33,6 +33,14 @@ the pixel buffer and its CVMetalTexture until GPU completion. It keeps at most
 one GPU command in flight and one latest pending frame; it drops frames instead
 of building an unbounded queue. Background transitions pause Metal submission.
 
+The pinned VLC output re-prepares a paused picture approximately every 80 ms
+([video_output.c](https://github.com/videolan/vlc/blob/005e69e67/src/video_output/video_output.c)).
+While paused, the callback compares visible BGRA rows with the last accepted
+picture before allocating or copying another buffer. Identical pixels keep the
+same input sequence and completed CNN result. Changed pixels still pass through
+for paused seeking or subtitle updates. Padding bytes are ignored, and playing
+frames avoid this comparison entirely.
+
 ## Full shader corpus
 
 `tools/port_anime4k.py` translates every `.glsl` under `Anime4K-master/glsl`.

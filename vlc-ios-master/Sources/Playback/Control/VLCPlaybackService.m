@@ -1311,6 +1311,9 @@ static const float kVLCPlaybackRateMaximum = 8.0f;
 
     dispatch_async(dispatch_get_main_queue(), ^{
 #if TARGET_OS_IOS
+        // The real VLC state controls paused redisplay deduplication. Keep
+        // accepting changed pixels so seeking/subtitles can redraw while paused.
+        [self->_roxyVideoOutput setPlaybackPaused:currentState == VLCMediaPlayerStatePaused];
         if (currentState == VLCMediaPlayerStateOpening || currentState == VLCMediaPlayerStatePlaying ||
             currentState == VLCMediaPlayerStatePaused || currentState == VLCMediaPlayerStateError) {
             self->_roxyAwaitingStart = NO;

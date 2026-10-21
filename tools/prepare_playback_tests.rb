@@ -24,7 +24,7 @@ tests.build_configurations.each do |config|
   settings['BUNDLE_LOADER'] = '$(TEST_HOST)'
   settings['SKIP_INSTALL'] = 'YES'
   settings['ENABLE_TESTING_SEARCH_PATHS'] = 'YES'
-  settings['OTHER_LDFLAGS'] = ['-framework', 'XCTest', '-framework', 'VLCKit']
+  settings['OTHER_LDFLAGS'] = ['-framework', 'XCTest', '-framework', 'VLCKit', '-framework', 'CoreVideo']
   settings['FRAMEWORK_SEARCH_PATHS'] = ['$(inherited)', '$(BUILT_PRODUCTS_DIR)', '$(BUILT_PRODUCTS_DIR)/PackageFrameworks', '$(PLATFORM_DIR)/Developer/Library/Frameworks']
   settings['HEADER_SEARCH_PATHS'] = ['$(inherited)', '$(SRCROOT)/Sources/Playback/Control', '$(SRCROOT)/Sources/App/iOS', '"$(SRCROOT)/Sources/Cloud/Document Picker"']
 end

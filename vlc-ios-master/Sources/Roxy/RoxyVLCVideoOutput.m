@@ -129,6 +129,8 @@ static void RoxyDisplay(void *opaque, void *picture)
     @autoreleasepool {
         RoxyVideoFormat *format = (__bridge RoxyVideoFormat *)opaque;
         if (!format.frames.acceptingFrames) return;
+        if ([format.frames isRepeatedPausedFrame:format.bytes width:format.width height:format.height
+                                      bytesPerRow:(NSInteger)format.pitch]) return;
         CVPixelBufferRef pixelBuffer = NULL;
         // One GPU frame, one latest frame, one incoming copy. Drop instead of
         // blocking VLC when all three pool buffers are still retained.
@@ -202,5 +204,10 @@ static void RoxyDisplay(void *opaque, void *picture)
 {
     _metalView.fillVideo = fill;
     _metalView.aspectRatio = ratio;
+}
+
+- (void)setPlaybackPaused:(BOOL)paused
+{
+    _frames.playbackPaused = paused;
 }
 @end

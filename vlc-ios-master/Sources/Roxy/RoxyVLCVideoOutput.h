@@ -11,6 +11,7 @@ NS_ASSUME_NONNULL_BEGIN
 + (instancetype)outputForPlayer:(VLCMediaPlayer *)player;
 - (void)configureForPlayer:(VLCMediaPlayer *)player enabled:(BOOL)enabled;
 - (void)setFillVideo:(BOOL)fill aspectRatio:(double)ratio;
+- (void)setPlaybackPaused:(BOOL)paused;
 @end
 
 NS_ASSUME_NONNULL_END
