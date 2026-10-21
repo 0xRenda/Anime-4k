@@ -548,6 +548,31 @@ static const float kVLCPlaybackRateMaximum = 8.0f;
         [libVLCOptions addObject:[NSString stringWithFormat:@"--no-%@", kVLCSettingStretchAudio]];
     }
 
+#if TARGET_OS_IOS
+    BOOL anime4KEnabled = [userDefaults objectForKey:@"RoxyAnime4KEnabled"] == nil ||
+                         [userDefaults boolForKey:@"RoxyAnime4KEnabled"];
+    BOOL useAnime4K = anime4KEnabled && _renderer == nil;
+    if (_listPlayer && _roxyVideoOutput.attached != useAnime4K) {
+        // Reusing a player first opened with vmem can leave its native output
+        // unable to decode after callbacks are detached. Start each backend
+        // with a fresh player, only after the previous asynchronous stop ended.
+        APLog(@"Recreating stopped player for %@ video output", useAnime4K ? @"Anime4K" : @"native");
+        _mediaPlayer.delegate = nil;
+        _mediaPlayer.media.delegate = nil;
+        _listPlayer.delegate = nil;
+        [_mediaPlayer removeObserver:self forKeyPath:@"time"];
+        self.pipController.stateChangeEventHandler = nil;
+        [self.pipController stopPictureInPicture];
+        self.pipController = nil;
+        self.isPipEnabled = NO;
+        _mediaController = nil;
+        [_roxyVideoOutput.view removeFromSuperview];
+        _roxyVideoOutput = nil;
+        _mediaPlayer = nil;
+        _listPlayer = nil;
+    }
+#endif
+
     if (!_listPlayer) {
         NSUInteger optionCount = libVLCOptions.count;
         APLog(@"no list player found, creating with %lu options", optionCount);
@@ -566,9 +591,7 @@ static const float kVLCPlaybackRateMaximum = 8.0f;
 
 #if TARGET_OS_IOS
     _roxyVideoOutput = [RoxyVLCVideoOutput outputForPlayer:_mediaPlayer];
-    BOOL anime4KEnabled = [userDefaults objectForKey:@"RoxyAnime4KEnabled"] == nil ||
-                         [userDefaults boolForKey:@"RoxyAnime4KEnabled"];
-    [_roxyVideoOutput configureForPlayer:_mediaPlayer enabled:anime4KEnabled && _renderer == nil];
+    [_roxyVideoOutput configureForPlayer:_mediaPlayer enabled:useAnime4K];
     UIView *roxyView = _roxyVideoOutput.view;
     if (roxyView && roxyView.superview != _actualVideoOutputView) {
         roxyView.frame = _actualVideoOutputView.bounds;
@@ -887,6 +910,10 @@ static const float kVLCPlaybackRateMaximum = 8.0f;
 - (void)observeValueForKeyPath:(NSString *)keyPath ofObject:(id)object change:(NSDictionary *)change context:(void *)context
 {
     dispatch_async(dispatch_get_main_queue(), ^{
+#if TARGET_OS_IOS
+        // A stopped backend can have an already-queued timing notification.
+        if (object != self->_mediaPlayer) return;
+#endif
         [self _restorePendingPlaybackPositionIfNeeded];
 
         if ([self.delegate respondsToSelector:@selector(playbackPositionUpdated:)]) {

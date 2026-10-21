@@ -23,9 +23,13 @@ lookups. The pinned source can be inspected at
 
 The callback owner is associated with the media player for its full lifetime;
 format-specific storage retains its thread-safe frame queue until cleanup. This accounts for
-VLC 4's asynchronous stop. Callbacks are reconfigured only for a stopped or new
-player. Restoring native rendering uses the original drawable setter: setting
-NULL vmem callbacks alone would leave VLC selecting the vmem output.
+VLC 4's asynchronous stop. Switching between native and callback video creates a
+fresh player after the old stop completes, clearing its time observer, delegates
+and Picture in Picture bindings. This also handles a player whose first session
+used callback video and could not subsequently initialize native decoding.
+Unchanged backends reuse their player. The bridge's direct native fallback uses
+the original drawable setter: setting NULL vmem callbacks alone would leave VLC
+selecting the vmem output.
 
 The UI never reads staging storage concurrently. At display time a complete
 frame is copied into an IOSurface-backed pixel buffer. The renderer retains both

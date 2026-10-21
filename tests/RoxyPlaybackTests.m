@@ -534,6 +534,36 @@
     CVPixelBufferRelease(resized);
 }
 
+- (void)testNativeVideoReopensAcrossAnime4KBackendChanges
+{
+    NSUserDefaults *defaults = NSUserDefaults.standardUserDefaults;
+    [defaults setObject:@"low" forKey:@"RoxyAnime4KQuality"];
+    NSURL *url = [[NSBundle bundleForClass:self.class] URLForResource:@"bars-8bit" withExtension:@"mkv"];
+    VLCPlaybackService *service = VLCPlaybackService.sharedInstance;
+    // The first session is enhanced: returning to native must also work when
+    // the player has never initialized a native video output before.
+    for (NSNumber *enhanced in @[@YES, @NO, @YES, @NO]) {
+        [defaults setBool:enhanced.boolValue forKey:@"RoxyAnime4KEnabled"];
+        [UIApplication.sharedApplication.delegate application:UIApplication.sharedApplication openURL:url options:@{}];
+        [self assertPlaying:url];
+        [service.playerDisplayController showFullscreenPlayback];
+        if (enhanced.boolValue) {
+            XCTAssertTrue([self waitUntil:^BOOL {
+                return self.animeView.window != nil && [service.anime4KRenderMetrics[@"passes"] intValue] > 0;
+            } seconds:60], @"An enhanced session must deliver visible processed video after a native session");
+        } else {
+            VLCMediaPlayer *player = [service valueForKey:@"mediaPlayer"];
+            XCTAssertEqual(player.drawable, service, @"Native playback must retain the actual VLC drawable");
+            XCTAssertNil(self.animeView);
+            XCTAssertTrue([self waitUntil:^BOOL {
+                UIView *output = [service valueForKey:@"actualVideoOutputView"];
+                return output.window != nil && output.subviews.count > 0;
+            } seconds:15], @"Returning from Anime4K must create and attach the native video surface");
+        }
+        [self stopAndWait];
+    }
+}
+
 - (void)testPausedComparisonAndMenuPreferencesReuseEnhancedFrame
 {
     NSUserDefaults *defaults = NSUserDefaults.standardUserDefaults;
