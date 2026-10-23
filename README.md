@@ -3,13 +3,13 @@
 An iPhone and iPad player based on the supplied VLC iOS source, with a Metal
 port of the supplied Anime4K shader library.
 
-**Status:** Version **4.0.3** adds native-size restoration, a larger High model,
-restoration modes, adaptive recovery and menu/rendering optimizations. Its
-expanded validation is pending the GitHub Actions run. The previous **4.0.2**
-release passed all **15 hosted iOS playback tests**,
-including actual 2× output and rendered 8-bit/10-bit color checks for all three
-presets. The app archive, 49 shaders and independent small-CNN CPU/Metal check
-also passed. Download the IPA from the [successful build](https://github.com/0xRenda/Anime-4k/actions/runs/39394555839).
+**Status:** Version **4.0.3 (1022)** passed all **19 hosted iOS playback tests**,
+including actual 2× output, rendered 8-bit/10-bit colors, paused-frame reuse and
+native/Anime4K backend changes. It adds native-size restoration, a larger High
+model, Standard/Soft/Strong modes, adaptive recovery and menu/rendering
+optimizations. All 49 shaders and the independent CPU/Metal check also passed.
+Download `Roxy-Player-automatic-unsigned` from the Artifacts section of the
+[successful build](https://github.com/0xRenda/Anime-4k/actions/runs/39610303389).
 Physical-device performance and external file-provider testing remain pending;
 see [validation results](docs/VALIDATION.md) and the [device checklist](docs/DEVICE_TESTING.md).
 

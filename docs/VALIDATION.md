@@ -215,3 +215,90 @@ presets and advanced shaders. Signing, physical iPhone/iPad playback, external
 file-provider grants and sustained device power/performance still require the
 device checklist. The enhanced path remains SDR; HDR and enhanced Picture in
 Picture are not certified by these tests.
+
+## 4.0.3 M-series quality and responsiveness
+
+The new source removes the native-size Auto bypass for restoration-capable
+presets and replaces High's L restoration with the supplied VL model. Manual
+quality no longer inherits an irreversible timing ceiling. Auto observes
+delivered-frame cadence, lowers quality under sustained load and can recover.
+Original weights and float16 intermediates remain unchanged.
+
+Standard/Soft/Strong select upstream restoration families. Strong uses a second
+restoration and conditional upscale only for Medium/High at display enlargement
+of at least 2× in both dimensions. Source highlight statistics are retained until
+the final PREKERNEL clamp. Powerful devices have larger bounded memory ceilings;
+Strong falls back to Standard before reducing model quality if allocation fails.
+
+The renderer asynchronously prepares and caches immutable pipelines. One finished
+enhanced frame is reused for paused comparisons, captures and presentation-only
+redraws. Unrelated settings and overlay visibility do not invalidate CNN work.
+Retina drawable sizing has one explicit owner; unchanged layout does not resize
+it. Thermal notifications invalidate processing only when an effective limit
+changes. Settings use deferred cached shader catalogs, static cards, larger
+controls, brighter playback contrast and an initially expanded sheet.
+
+The paused-frame test waits for VLC's final delivered pause frame, completed
+computation and display geometry to settle before recording a baseline. It then
+requires unchanged CNN counts, input sequence and decoder cadence, plus identical
+PNG pixels after unrelated preferences and Original comparison. Cache revision,
+target size and miss reason are recorded to distinguish new source/display work
+from unnecessary filtering.
+
+Real VLC diagnostics exposed an 80 ms paused-picture redisplay loop: the previous
+renderer accepted 752 callbacks and ran 644 CNN computations during a 60-second
+paused check. The callback now rejects identical visible pixels before allocating
+or copying another buffer. A production-queue test covers distinct buffers with
+different padding, single-pixel changes, format changes and resumed playback.
+The real playback test also requires repeated VLC displays to be suppressed
+without changing input sequence, CNN count or rendered pixels.
+
+A separate regression covers delayed audio-player switches after confirmed HEVC
+video. Unknown track lists no longer prove audio-only media; queued presentation
+work rechecks media identity, generation and discovered video tracks. Creating an
+inactive player controller no longer takes over the playback delegate. A fresh
+player is created after a completed stop when changing native/callback backends;
+the previous player could fail native decoding if its first session used vmem.
+The regression alternates enhanced/native sessions twice, requiring decoded
+video and a visible surface each time. The hosted suite now contains 19 tests.
+
+The independent Metal tests cover sustained synthetic overload, Auto recovery,
+manual High selection, native restoration, all restoration modes and a CPU-derived
+5×5 source highlight bound. The nonflat native-resolution fixture changes by up
+to 0.28546 in a normalized RGB channel; this proves processing, not a perceptual
+quality score. The original small-CNN reference error remains 0.0009765625.
+
+### Successful 4.0.3 build
+
+[Actions run 39610303389](https://github.com/0xRenda/Anime-4k/actions/runs/39610303389),
+source `f6a1eff73d847de04ff7b32949ecd0f81baa243b`, passed:
+
+- All 18 source/packaging tests and generated-shader verification.
+- All 49 shaders compiled for macOS, iPhoneOS and iPhone Simulator. The actual
+  Metal device ran the CPU-reference check, Auto overload/recovery, manual High,
+  native restoration and all three restoration modes with source highlight bounds.
+- All 19 hosted iOS tests, with zero failures, in 41.280 seconds. They include
+  media opening, replacement/reopening, paused live enabling, backend changes,
+  8-bit/10-bit rendered colors, Retina dimensions and visible settings controls.
+- All 80 sampled color bars passed: maximum RGB channel error **3/255**;
+  maximum neutral red/blue difference **0/255**. These synthetic samples do not
+  certify every media color space.
+- The paused High frame retained input sequence **21** and CNN count **1** through
+  duplicate VLC displays, unrelated preferences and Original/Anime4K comparison.
+  Returning to the enhanced view also required identical rendered PNG pixels.
+- Saved menu/player PNGs were visually inspected for clipping and contrast at
+  portrait iPhone size. iPad layouts and accessibility sizes still need device QA.
+
+Version **4.0.3**, build **1022**, was uploaded as
+`Roxy-Player-automatic-unsigned` (artifact ID **12351921573**; ZIP size
+**37,248,933 bytes**, retained for 14 days). The IPA was left on GitHub and was
+not downloaded into the Windows workspace. Every app variant includes all
+presets and advanced shaders with their original weights.
+
+No physical M5 iPad benchmark was performed. GPU timing and source FPS are runtime
+measurements; source FPS estimates callback delivery cadence rather than the
+container's declared rate. Skipped frames count latest-frame replacements between
+presentations, not every possible decoder/pool drop. The path still uses VLC
+software decode, a bounded BGRA copy and ordinary Metal compute. M5 tensor/Neural
+Engine acceleration, zero-copy hardware decode, HDR and enhanced PiP remain
+unimplemented. Use the device checklist for sustained performance and thermals.
